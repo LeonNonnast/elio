@@ -1,0 +1,7 @@
+_bmad
+.claude
+
+# build / deps
+node_modules/
+dist/
+*.tsbuildinfo

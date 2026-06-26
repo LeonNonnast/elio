@@ -1,0 +1,19 @@
+{
+  "name": "@elio/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ELIO Kern-Engine: Runner, Injector, ctx-Contracts, NodeResult/Elicitation-Primitive (kennt keine Fachlichkeit).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean"
+  }
+}

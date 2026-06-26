@@ -1,0 +1,22 @@
+{
+  "name": "elio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ELIO — Enterprise Loop Intelligence Orchestrator (artifact-centric Loop-Engine)",
+  "packageManager": "pnpm@10.24.0",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
