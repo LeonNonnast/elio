@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>elio — Enterprise Loop Intelligence Orchestrator</title>
+  <meta name="description" content="elio ist eine artifact-centric Loop-Engine: deklariere ein Artefakt und ein Eval-Gate, elio dreht einen Outer Loop, bis das Artefakt gut genug ist. Governance = Dependency Injection.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="elio — Enterprise Loop Intelligence Orchestrator">
+  <meta property="og:description" content="Artifact-centric Loop-Engine. Governance = Dependency Injection. 10 Pakete, 4 Oberflächen, real-verifiziert.">
+  <meta name="theme-color" content="#0f1218">
+  <style>
+  :root {
+    --ground: #f3f4f7;
+    --surface: #ffffff;
+    --surface-2: #f8f9fb;
+    --ink: #1a1d24;
+    --ink-soft: #3c414c;
+    --muted: #5f6675;
+    --line: #e2e5ec;
+    --line-soft: #edeff3;
+    --accent: #d9591f;
+    --accent-deep: #b8481a;
+    --accent-wash: #fbeadf;
+    --ok: #1d9c69;
+    --warn: #c68a15;
+    --stop: #c14338;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Cascadia Code", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Georgia", serif;
+    --maxw: 1120px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0f1218;
+      --surface: #161a21;
+      --surface-2: #1b202a;
+      --ink: #e9ecf2;
+      --ink-soft: #c2c8d2;
+      --muted: #949cab;
+      --line: #262c37;
+      --line-soft: #1f242e;
+      --accent: #f0743a;
+      --accent-deep: #d9591f;
+      --accent-wash: #2a1a12;
+      --ok: #35b981;
+      --warn: #d9a62c;
+      --stop: #e0645a;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f3f4f7; --surface: #ffffff; --surface-2: #f8f9fb;
+    --ink: #1a1d24; --ink-soft: #3c414c; --muted: #5f6675;
+    --line: #e2e5ec; --line-soft: #edeff3;
+    --accent: #d9591f; --accent-deep: #b8481a; --accent-wash: #fbeadf;
+    --ok: #1d9c69; --warn: #c68a15; --stop: #c14338;
+  }
+  :root[data-theme="dark"] {
+    --ground: #0f1218; --surface: #161a21; --surface-2: #1b202a;
+    --ink: #e9ecf2; --ink-soft: #c2c8d2; --muted: #949cab;
+    --line: #262c37; --line-soft: #1f242e;
+    --accent: #f0743a; --accent-deep: #d9591f; --accent-wash: #2a1a12;
+    --ok: #35b981; --warn: #d9a62c; --stop: #e0645a;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 1.02rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  /* ── top bar ── */
+  header.bar {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: saturate(1.3) blur(10px);
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar-in { max-width: var(--maxw); margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-weight: 700; letter-spacing: -0.02em; font-size: 1.05rem; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-wash); }
+  nav.sects { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  nav.sects a {
+    font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.02em;
+    color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 7px;
+  }
+  nav.sects a:hover { color: var(--ink); background: var(--surface-2); }
+  .pill-live {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.01em;
+    color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 11px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  }
+  .pill-live .g { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  /* ── hero ── */
+  .hero { padding: 60px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
+  .eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-deep); margin: 0 0 18px; }
+  h1.title {
+    font-family: var(--sans); font-weight: 820; font-size: clamp(3.4rem, 9vw, 6.2rem);
+    line-height: 0.92; letter-spacing: -0.045em; margin: 0 0 6px; text-wrap: balance;
+  }
+  .subline { font-family: var(--mono); font-size: 0.86rem; color: var(--muted); letter-spacing: 0.01em; margin: 0 0 26px; }
+  .thesis { font-size: 1.22rem; line-height: 1.5; color: var(--ink-soft); max-width: 34ch; margin: 0 0 22px; text-wrap: pretty; }
+  .thesis b { color: var(--ink); font-weight: 650; }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; }
+  .tag .a { color: var(--accent-deep); }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .cta { display: inline-flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.01em; text-decoration: none; padding: 11px 17px; border-radius: 10px; transition: transform .16s ease, background .16s ease, border-color .16s ease; }
+  .cta svg { width: 17px; height: 17px; fill: currentColor; }
+  .cta.primary { background: var(--ink); color: var(--ground); border: 1px solid var(--ink); }
+  .cta.primary:hover { transform: translateY(-1px); background: var(--accent-deep); border-color: var(--accent-deep); color: #fff; }
+  .cta.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  .cta.ghost:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+  footer .wrap a { color: var(--accent-deep); text-decoration: none; }
+  footer .wrap a:hover { text-decoration: underline; }
+
+  .loopcard {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+    padding: 14px; box-shadow: 0 1px 0 var(--line-soft), 0 18px 40px -28px rgba(20,24,33,0.4);
+  }
+  .loopcard figcaption { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); padding: 6px 6px 2px; display: flex; justify-content: space-between; }
+  #loop { width: 100%; height: auto; display: block; border-radius: 12px; }
+
+  /* ── section scaffolding ── */
+  section.block { padding: 46px 0; border-top: 1px solid var(--line); }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 30px; }
+  .sec-no { font-family: var(--mono); font-size: 0.82rem; color: var(--accent-deep); letter-spacing: 0.05em; padding-top: 6px; }
+  .sec-title { font-family: var(--sans); font-weight: 760; font-size: clamp(1.7rem, 3.4vw, 2.35rem); letter-spacing: -0.03em; margin: 0; line-height: 1.05; text-wrap: balance; }
+  .sec-lede { color: var(--muted); font-size: 1rem; max-width: 60ch; margin: 6px 0 0; }
+
+  /* ── generic cards ── */
+  .cards { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
+    transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+  .card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); transform: translateY(-2px); }
+  .card h3 { font-size: 1.06rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .card p { margin: 0; color: var(--ink-soft); font-size: 0.95rem; line-height: 1.55; }
+  .kicker { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; display: block; }
+
+  /* ── vision loop diagram ── */
+  .loopmodel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+  .ring { position: relative; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .ring .outer, .ring .inner { border-radius: 12px; padding: 16px; }
+  .ring .outer { border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--line)); }
+  .ring .inner { border: 1.5px solid var(--line); background: var(--surface); margin-top: 14px; }
+  .ring .lbl { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; color: var(--accent-deep); margin: 0 0 6px; }
+  .ring .inner .lbl { color: var(--ink-soft); }
+  .ring .txt { font-size: 0.9rem; color: var(--ink-soft); margin: 0; }
+  .cross { font-family: var(--mono); font-size: 0.78rem; text-align: center; color: var(--muted); margin: 12px 0 0; }
+  .cross b { color: var(--accent-deep); }
+
+  /* ── principle rows ── */
+  .princ { display: grid; gap: 0; }
+  .princ .row { display: grid; grid-template-columns: 130px 1fr; gap: 20px; padding: 16px 0; border-top: 1px solid var(--line-soft); }
+  .princ .row:first-child { border-top: none; }
+  .princ .k { font-family: var(--mono); font-size: 0.78rem; color: var(--accent-deep); letter-spacing: 0.02em; }
+  .princ .v { color: var(--ink-soft); font-size: 0.96rem; }
+  .princ .v b { color: var(--ink); font-weight: 650; }
+
+  /* ── process steps ── */
+  .steps { counter-reset: st; display: grid; gap: 14px; }
+  .step { display: grid; grid-template-columns: 42px 1fr; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .step::before {
+    counter-increment: st; content: counter(st, decimal-leading-zero);
+    font-family: var(--mono); font-size: 0.8rem; color: var(--accent);
+    border: 1px solid var(--line); border-radius: 8px; height: 36px; display: flex; align-items: center; justify-content: center; background: var(--surface-2);
+  }
+  .step h4 { margin: 0 0 3px; font-size: 1rem; letter-spacing: -0.01em; }
+  .step p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+  /* ── architecture map ── */
+  .arch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .layer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .layer .kicker { color: var(--accent-deep); }
+  .pkg { font-family: var(--mono); font-size: 0.82rem; color: var(--ink); display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--line-soft); }
+  .pkg:first-of-type { border-top: none; }
+  .pkg .d { color: var(--muted); font-family: var(--sans); font-size: 0.8rem; }
+
+  /* ── palette chips ── */
+  .palette { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .chip { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; color: var(--ink-soft); background: var(--surface); }
+
+  /* ── v0.2 shipped ── */
+  .shipped { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .ship { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; padding: 16px 18px; }
+  .ship h4 { margin: 0 0 6px; font-size: 0.98rem; font-family: var(--mono); letter-spacing: -0.01em; }
+  .ship p { margin: 0; color: var(--ink-soft); font-size: 0.9rem; line-height: 1.5; }
+  .ship .done { font-family: var(--mono); font-size: 0.68rem; color: var(--ok); letter-spacing: 0.05em; }
+
+  /* ── metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .metric { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .metric .n { font-family: var(--sans); font-weight: 800; font-size: clamp(1.8rem, 4vw, 2.5rem); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .metric .n small { font-size: 0.9rem; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+  .metric .cap { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-top: 8px; letter-spacing: 0.02em; }
+
+  /* ── status list ── */
+  .status { display: grid; gap: 10px; }
+  .st { display: grid; grid-template-columns: 18px 1fr auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px 15px; }
+  .st .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .st .dot.ok { background: var(--ok); } .st .dot.warn { background: var(--warn); } .st .dot.stop { background: var(--stop); }
+  .st .name { font-size: 0.95rem; color: var(--ink); }
+  .st .val { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); text-align: right; }
+
+  /* ── verdict ── */
+  .verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 34px; margin-top: 8px; }
+  .verdict .q { font-family: var(--serif); font-style: italic; font-size: clamp(1.5rem, 3.4vw, 2.3rem); line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px; text-wrap: balance; }
+  .verdict .a-lead { font-size: 1.05rem; color: var(--ink-soft); margin: 0 0 26px; max-width: 66ch; }
+  .verdict .a-lead b { color: var(--ink); }
+  .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .col h5 { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 10px; }
+  .col.real h5 { color: var(--ok); }
+  .col.not h5 { color: var(--warn); }
+  .col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  .col li { position: relative; padding-left: 20px; font-size: 0.93rem; color: var(--ink-soft); line-height: 1.45; }
+  .col li::before { position: absolute; left: 0; top: 0.05em; font-family: var(--mono); }
+  .col.real li::before { content: "+"; color: var(--ok); font-weight: 700; }
+  .col.not li::before { content: "\2013"; color: var(--warn); font-weight: 700; }
+  .bottom-line { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 1rem; color: var(--ink-soft); }
+  .bottom-line b { color: var(--ink); }
+
+  footer { border-top: 1px solid var(--line); padding: 26px 0 44px; color: var(--muted); font-family: var(--mono); font-size: 0.76rem; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 30px; }
+    .g4, .metrics, .arch { grid-template-columns: repeat(2, 1fr); }
+    .g3 { grid-template-columns: 1fr; }
+    .loopmodel, .shipped, .ledger { grid-template-columns: 1fr; }
+    nav.sects { display: none; }
+  }
+  @media (max-width: 560px) {
+    .g2, .g4, .metrics, .arch { grid-template-columns: 1fr; }
+    .princ .row { grid-template-columns: 1fr; gap: 4px; }
+    .st { grid-template-columns: 14px 1fr; } .st .val { grid-column: 2; text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <span class="brand"><span class="dot" aria-hidden="true"></span>elio</span>
+    <nav class="sects" aria-label="Sektionen">
+      <a href="#vision">Vision</a>
+      <a href="#vorgehen">Vorgehen</a>
+      <a href="#umsetzung">Umsetzung</a>
+      <a href="#ergebnisse">Ergebnisse</a>
+    </nav>
+    <span class="pill-live"><span class="g" aria-hidden="true"></span>v0.2 · 719 Tests grün</span>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">Enterprise Loop Intelligence Orchestrator</p>
+          <h1 class="title">elio</h1>
+          <p class="subline">artifact-centric loop-engine · governance = dependency injection</p>
+          <p class="thesis">Du deklarierst ein <b>Artefakt</b> und ein <b>Eval-Gate</b> — elio dreht einen Outer&nbsp;Loop, bis das Artefakt <b>gut genug</b> ist. Nicht „Steps fertig", sondern „Ziel erreicht".</p>
+          <div class="hero-tags">
+            <span class="tag"><span class="a">10</span> Pakete</span>
+            <span class="tag"><span class="a">SDK</span> · CLI · MCP · Studio</span>
+            <span class="tag"><span class="a">23</span> Architektur-Invarianten</span>
+            <span class="tag">„<span class="a">elio denkt nie</span>"</span>
+          </div>
+          <div class="cta-row">
+            <a class="cta primary" href="https://github.com/LeonNonnast/elio" target="_blank" rel="noopener">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+              GitHub ansehen
+            </a>
+            <a class="cta ghost" href="https://github.com/LeonNonnast/elio#60-second-quickstart" target="_blank" rel="noopener">60-Sek-Quickstart →</a>
+          </div>
+        </div>
+        <figure class="loopcard">
+          <canvas id="loop" width="520" height="360" role="img" aria-label="Der Outer Loop: ein Signal wandert über die Nodes und konvergiert auf das Eval-Gate."></canvas>
+          <figcaption><span>OUTER&nbsp;LOOP</span><span id="loop-state">gate: prüfe…</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 01 VISION ── -->
+  <section class="block" id="vision">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-no">01</span>
+        <div>
+          <h2 class="sec-title">Projektvision</h2>
+          <p class="sec-lede">Eine Loop-Engine, keine Workflow-Engine. Das Ziel ist das Artefakt — Loops sind die Lösung, Context die eigentliche Aufgabe.</p>
+        </div>
+      </div>
+
+      <div class="loopmodel reveal">
+        <div class="ring">
+          <div class="outer">
+            <p class="lbl">ELIO · OUTER LOOP · inter-session</p>
+            <p class="txt">Loopt über <b>mehrere</b> Agent-Sessions, bis das Artefakt das Eval-Gate besteht.</p>
+            <div class="inner">
+              <p class="lbl">VELA · INNER LOOP · intra-session</p>
+              <p class="txt">Liefert Kontext zur richtigen Zeit <b>innerhalb</b> einer Session.</p>
+            </div>
+          </div>
+          <p class="cross">was die Session-Grenze kreuzt ist das <b>Artefakt</b> — nie das Transcript</p>
+        </div>
+        <div class="cards" style="align-content:start">
+          <div class="card">
+            <span class="kicker">Inv. 1 — Exit-Bedingung</span>
+            <h3>Artefakt „gut genug", nicht „Steps durch"</h3>
+            <p>Das Artefakt ist durabel, iterativ erweitert, komprimierter State. Ein Loop endet am Eval-Gate — nicht, wenn eine Step-Liste abgearbeitet ist.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">Inv. 7 — Zwei Node-Klassen</span>
+            <h3>„elio denkt nie"</h3>
+            <p>Denken passiert ausschließlich in delegierter Intelligenz (<code>llm</code>, <code>agent</code>). Die Runtime orchestriert deterministisch — auch der dynamische Planner ist nur ein <code>agent</code>-Node.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">Inv. 14 — security by absence</span>
+            <h3>Governance <b>ist</b> Dependency Injection</h3>
+            <p>Der Injector baut das <code>ctx</code> pro Node aus der Policy. Kein Runtime-Permission-Check: eine Node <b>kann</b> nicht, was nicht injiziert wurde. Audit = was möglich war.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 02 VORGEHEN ── -->
+  <section class="block" id="vorgehen">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-no">02</span>
+        <div>
+          <h2 class="sec-title">Projektvorgehen</h2>
+          <p class="sec-lede">Invariant-getrieben, SDK als Kern, an echter Last erprobt — und Grenzen ehrlich dokumentiert statt still kaputt.</p>
+        </div>
+      </div>
+
+      <div class="princ reveal" style="margin-bottom:30px">
+        <div class="row"><div class="k">Rückgrat</div><div class="v"><b>23 nummerierte Invarianten</b> als verbindliche Leitplanken. Jede Design-Entscheidung leitet sich daraus ab — Architektur als prüfbarer Vertrag, nicht als Bauchgefühl.</div></div>
+        <div class="row"><div class="k">Kern &amp; Clients</div><div class="v"><b>Inv. 2:</b> Runner, Injector, Nodes leben im SDK. CLI, MCP, Studio sind <b>dünne Clients</b> — Policy/Cost/Routing werden nie dupliziert oder umgangen. Ein zentraler <code>EngineService</code> hält die eine Wahrheit.</div></div>
+        <div class="row"><div class="k">Dogfood</div><div class="v">Echte Vertikalen (<code>migrate.csv-to-db</code>, <code>build-skill</code>) als <b>erste reale Last</b> für den Kern — statt Toy-Beispielen.</div></div>
+        <div class="row"><div class="k">Ehrlichkeit</div><div class="v">Aufgeschobenes wird <b>dokumentiert, nicht faked</b>. Opake Agenten, ungetestete Pfade und Grenzen stehen als solche im Code — „green tests" behaupten nie mehr, als real läuft.</div></div>
+      </div>
+
+      <span class="kicker reveal" style="margin-bottom:12px">Arbeitsweise dieser v0.2-Runde</span>
+      <div class="steps reveal">
+        <div class="step"><div><h4>Ist-Zustand mappen</h4><p>Parallele Read-only-Agenten kartieren die exakten Seams (Datei:Zeile) vor jeder Änderung.</p></div></div>
+        <div class="step"><div><h4>Gegen das echte System proben</h4><p>Vor dem Umbau die reale <code>vela-sdk</code> mit Probe-Skripten getestet — Pause/Resume-Mechanik verifiziert, bevor eine Zeile Adapter entstand.</p></div></div>
+        <div class="step"><div><h4>Implementieren, dünn &amp; typsicher</h4><p>Additive Core-Seams (optionale Felder), gespiegelte Muster (fs/db → http), keine Invarianten-Brüche.</p></div></div>
+        <div class="step"><div><h4>Adversarial verifizieren</h4><p>Offline-Doubles <b>plus</b> ein guarded Real-Test gegen das echte Vela-dist. Voller Typecheck + Suite grün, dann committen &amp; pushen.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 03 UMSETZUNG ── -->
+  <section class="block" id="umsetzung">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-no">03</span>
+        <div>
+          <h2 class="sec-title">Umsetzung</h2>
+          <p class="sec-lede">10 Pakete in einem pnpm-Monorepo, ~22.000 Zeilen Kern-TypeScript, vier bedienbare Oberflächen über einer Engine.</p>
+        </div>
+      </div>
+
+      <span class="kicker reveal" style="margin-bottom:12px">Paket-Architektur</span>
+      <div class="arch reveal" style="margin-bottom:28px">
+        <div class="layer">
+          <span class="kicker">Kern</span>
+          <div class="pkg">core<span class="d">Runner · Injector · Tape</span></div>
+          <div class="pkg">sdk<span class="d">run/resume · Loader · Services</span></div>
+          <div class="pkg">engine<span class="d">EngineService · Host/Client</span></div>
+        </div>
+        <div class="layer">
+          <span class="kicker">Surfaces</span>
+          <div class="pkg">cli<span class="d">run · resume · runs</span></div>
+          <div class="pkg">mcp<span class="d">Features als MCP-Tools</span></div>
+          <div class="pkg">studio<span class="d">Live-Dashboard, read-mostly</span></div>
+        </div>
+        <div class="layer">
+          <span class="kicker">Agent-Engines</span>
+          <div class="pkg">vela-adapter<span class="d">transparent · ctx.model</span></div>
+          <div class="pkg">claude-adapter<span class="d">opak · Hüllen-Governance</span></div>
+        </div>
+        <div class="layer">
+          <span class="kicker">Vertikalen</span>
+          <div class="pkg">migrate<span class="d">CSV → DB</span></div>
+          <div class="pkg">skill-builder<span class="d">Feature → SKILL.md</span></div>
+        </div>
+      </div>
+
+      <div class="cards g3 reveal" style="margin-bottom:28px">
+        <div class="card">
+          <span class="kicker">Node-Palette</span>
+          <h3>Built-in == custom</h3>
+          <p>agent · llm · approval · router · condition · batch · transform · validate · synthesize · memo · db · file · http · retro · promote — jede eine reine Funktion <code>(input, ctx)</code>.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Provider-Schicht</span>
+          <h3>provider:model, gescopt</h3>
+          <p>mock · ollama · azure-openai · claude, über benannte Profile (<code>elio.profiles.yaml</code>). Credentials referenziert, Kosten als Richtwerte — <code>ScopedModelService</code> setzt die Policy durch.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Learning-Loop</span>
+          <h3>Loops erzeugen Evals</h3>
+          <p>Das Loop-Tape zeichnet jeden Run auf → Process-Mining, Kandidaten-Promotion, episodic Memory. Evals härten die Loops zurück.</p>
+        </div>
+      </div>
+
+      <span class="kicker reveal" style="margin-bottom:12px">Diese Runde geliefert (v0.2)</span>
+      <div class="shipped reveal">
+        <div class="ship"><h4>maxCostUsd <span class="done">✓ done</span></h4><p>Harter USD-Deckel auf Run-Ebene — stoppt am Loop-Kopf ohne Grant-Dialog. Reist über Resume mit; CLI-Flag <code>--max-cost-usd</code>.</p></div>
+        <div class="ship"><h4>ctx.http <span class="done">✓ done</span></h4><p>Host-gescopter HTTP-Zugriff, per-Call durchgesetzt (Muster von fs/db gespiegelt). Built-in <code>http</code>-Node, fail-by-absence.</p></div>
+        <div class="ship"><h4>claude-adapter <span class="done">✓ done</span></h4><p>Opaker Claude-Agent als Node. Beide realen Transports offline exercised; Live-Calls env-guarded; SDK als <code>optionalDependency</code>.</p></div>
+        <div class="ship"><h4>Vela suspend/resume <span class="done">✓ real-verifiziert</span></h4><p>Echte Pause via <code>depends_on</code>-Gate, identity↔correlation-Resume — gegen das echte <code>vela-sdk</code>-dist bewiesen.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 04 ERGEBNISSE ── -->
+  <section class="block" id="ergebnisse">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-no">04</span>
+        <div>
+          <h2 class="sec-title">Projektergebnisse</h2>
+          <p class="sec-lede">Was messbar steht — und die ehrliche Antwort auf die Frage, ob praktischer Mehrwert entstanden ist.</p>
+        </div>
+      </div>
+
+      <div class="metrics reveal" style="margin-bottom:16px">
+        <div class="metric"><div class="n">719<small> / 3 skip</small></div><div class="cap">Tests grün · 93 Dateien</div></div>
+        <div class="metric"><div class="n">10</div><div class="cap">Pakete · 1 Monorepo</div></div>
+        <div class="metric"><div class="n">~22k</div><div class="cap">Zeilen Kern-TypeScript</div></div>
+        <div class="metric"><div class="n">0</div><div class="cap">Typecheck- / Lint-Fehler</div></div>
+      </div>
+
+      <div class="status reveal" style="margin-bottom:32px">
+        <div class="st"><span class="dot ok" aria-hidden="true"></span><span class="name">Outer Loop, Nodes, Run-Store, Checkpoint/Resume</span><span class="val">läuft, getestet</span></div>
+        <div class="st"><span class="dot ok" aria-hidden="true"></span><span class="name">4 Oberflächen (SDK · CLI · MCP · Studio) über einem EngineService</span><span class="val">built-bin-smoke grün</span></div>
+        <div class="st"><span class="dot ok" aria-hidden="true"></span><span class="name">Vela suspend/resume gegen echtes vela-sdk</span><span class="val">real-verifiziert</span></div>
+        <div class="st"><span class="dot warn" aria-hidden="true"></span><span class="name">Claude-Live-Calls, DB-Run-Store, OS-Sandbox für alle Nodes</span><span class="val">guarded / deferred</span></div>
+        <div class="st"><span class="dot warn" aria-hidden="true"></span><span class="name">Externe Nutzer, Produktivbetrieb, ausgelieferter Business-Case</span><span class="val">offen</span></div>
+      </div>
+
+      <div class="verdict reveal">
+        <p class="q">„Haben wir praktischen Mehrwert geschaffen?"</p>
+        <p class="a-lead">Ehrlich: <b>ja — als Fundament und Erkenntnis, noch nicht als eingesetztes Werkzeug mit Nutzern.</b> elio ist ein kohärenter, durchgetesteter Referenz-Prototyp einer <em>governten</em> Loop-Orchestrierung. Der Wert liegt heute in der Architektur und der bewiesenen Machbarkeit, nicht in eingesparten Kosten im Betrieb.</p>
+        <div class="ledger">
+          <div class="col real">
+            <h5>Echter Mehrwert</h5>
+            <ul>
+              <li>Ein <b>eigenständiges Governance-Modell</b> (Governance = DI / security by absence) — konzeptionell anders als Prompt-Glue-Frameworks.</li>
+              <li>Eine <b>lauffähige, getestete Engine</b> mit echten Integrationen (Vela, Azure, Ollama) — nicht nur Slideware.</li>
+              <li><b>Engineering-Disziplin als Asset:</b> aufgeschobenes ist dokumentiert, Kritisches ist real-verifiziert, nichts ist still kaputt.</li>
+              <li>Ein tragfähiges <b>Fundament</b>: additive Seams, dünne Clients, klare Invarianten — erweiterbar ohne Umbau.</li>
+            </ul>
+          </div>
+          <div class="col not">
+            <h5>(Noch) nicht eingelöst</h5>
+            <ul>
+              <li>Kein Produktivbetrieb, keine externen Nutzer — der Loop lief noch nicht gegen echte Last aus dem Feld.</li>
+              <li>Die Vertikalen sind <b>Dogfood-Demos</b>, kein ausgelieferter, bezahlter Anwendungsfall.</li>
+              <li>„Enterprise" ist <b>Positionierung</b>, nicht Deployment: Multi-Tenant, Skalierung, Ops fehlen.</li>
+              <li>ROI ist bisher <b>Erkenntnisgewinn</b> — messbarer Geschäftsnutzen ist der nächste Beweis.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="bottom-line">Kurz: Wir haben <b>ein belastbares, ehrliches Fundament mit einer eigenen These</b> gebaut — der praktische Mehrwert ist gesichert als <b>Prototyp &amp; Machbarkeitsnachweis</b>. Der nächste Schritt, der ihn in <b>gelieferten Nutzen</b> übersetzt: ein echter Anwendungsfall mit echten Nutzern (z.&nbsp;B. <code>migrate</code> gegen reale Daten) statt weiterer Kern-Features.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>elio · Enterprise Loop Intelligence Orchestrator</span>
+    <span>MIT · v0.2 · <a href="https://github.com/LeonNonnast/elio" target="_blank" rel="noopener">github.com/LeonNonnast/elio</a></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var canvas = document.getElementById("loop");
+  if (!canvas || !canvas.getContext) return;
+  var ctx = canvas.getContext("2d");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var stateEl = document.getElementById("loop-state");
+
+  function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  var W = 520, H = 360;
+  function resize() {
+    var cssw = canvas.clientWidth || W;
+    var scale = cssw / W;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * scale * dpr);
+    canvas.height = Math.round(H * scale * dpr);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  }
+
+  // node positions on an ellipse; index 0 (top) is the eval gate
+  var cx = 260, cy = 178, rx = 176, ry = 118;
+  var N = 6;
+  var nodes = [];
+  for (var i = 0; i < N; i++) {
+    var t = -Math.PI / 2 + (i / N) * Math.PI * 2;
+    nodes.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t), t: t });
+  }
+  var labels = ["gate", "agent", "validate", "route", "llm", "transform"];
+
+  var prog = 0;            // 0..1 around the loop
+  var laps = 0;
+  var passed = false;
+
+  function pt(p) {
+    var a = -Math.PI / 2 + p * Math.PI * 2;
+    return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) };
+  }
+
+  function draw() {
+    var ink = css("--ink"), muted = css("--muted"), line = css("--line"),
+        accent = css("--accent"), surface = css("--surface"), ok = css("--ok");
+    ctx.clearRect(0, 0, W, H);
+
+    // loop track
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = line; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // travelled arc (accent), from top clockwise to prog
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+    ctx.strokeStyle = accent; ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.stroke();
+
+    // nodes
+    for (var i = 0; i < N; i++) {
+      var n = nodes[i];
+      var isGate = i === 0;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, isGate ? 9 : 6, 0, Math.PI * 2);
+      ctx.fillStyle = surface; ctx.fill();
+      ctx.strokeStyle = isGate ? (passed ? ok : accent) : line;
+      ctx.lineWidth = isGate ? 2.4 : 1.6; ctx.stroke();
+      if (isGate) {
+        ctx.beginPath(); ctx.arc(n.x, n.y, 3.4, 0, Math.PI * 2);
+        ctx.fillStyle = passed ? ok : accent; ctx.fill();
+      }
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = isGate ? (passed ? ok : accent) : muted;
+      ctx.textAlign = "center";
+      var dy = n.y < cy ? -16 : 20;
+      ctx.fillText(labels[i], n.x, n.y + dy);
+    }
+
+    // travelling signal
+    var s = pt(prog);
+    var glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 16);
+    glow.addColorStop(0, accent); glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = 0.5; ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = accent; ctx.fill();
+
+    // centre label
+    ctx.textAlign = "center";
+    ctx.font = "600 13px ui-monospace, monospace";
+    ctx.fillStyle = ink;
+    ctx.fillText(passed ? "gate: passed" : "artefakt → eval-gate", cx, cy - 4);
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillStyle = muted;
+    ctx.fillText("lap " + Math.min(laps + 1, 3) + " / 3", cx, cy + 14);
+  }
+
+  if (reduce) {
+    prog = 0.72; laps = 2; passed = false;
+    resize(); draw();
+    if (stateEl) stateEl.textContent = "gate: prüfe…";
+    window.addEventListener("resize", function () { resize(); draw(); });
+    return;
+  }
+
+  var last = 0, running = true;
+  function frame(ts) {
+    if (!running) return;
+    if (!last) last = ts;
+    var dt = (ts - last) / 1000; last = ts;
+    if (!passed) {
+      prog += dt * 0.34;
+      if (prog >= 1) {
+        prog -= 1; laps++;
+        if (laps >= 2) { // converge on the 3rd pass
+          passed = true; prog = 0;
+          if (stateEl) { stateEl.textContent = "gate: passed ✓"; stateEl.style.color = css("--ok"); }
+          setTimeout(function () { // reset the loop after a beat
+            passed = false; laps = 0; prog = 0;
+            if (stateEl) { stateEl.textContent = "gate: prüfe…"; stateEl.style.color = ""; }
+          }, 2600);
+        }
+      }
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize(); draw();
+  window.addEventListener("resize", function () { resize(); draw(); });
+  requestAnimationFrame(frame);
+
+  // pause when offscreen (be a good citizen)
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !running) { running = true; last = 0; requestAnimationFrame(frame); }
+        else if (!e.isIntersecting) { running = false; }
+      });
+    }, { threshold: 0.05 }).observe(canvas);
+  }
+})();
+
+// scroll reveals
+(function () {
+  var els = document.querySelectorAll(".reveal");
+  if (!("IntersectionObserver" in window)) { els.forEach(function (e){ e.classList.add("in"); }); return; }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+  }, { threshold: 0.12 });
+  els.forEach(function (e) { io.observe(e); });
+})();
+</script>
+</body>
+</html>

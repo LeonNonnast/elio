@@ -1,0 +1,12 @@
+# Keep the Docker build context tiny — the landing image only needs landing/.
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.elio
+_bmad
+.claude
+packages
+docs
+scripts
