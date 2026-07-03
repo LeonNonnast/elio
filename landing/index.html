@@ -237,6 +237,22 @@
   .bottom-line { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 1rem; color: var(--ink-soft); }
   .bottom-line b { color: var(--ink); }
 
+  /* ── getting started ── */
+  .start-grid { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 16px; align-items: start; }
+  .terminal { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 14px 34px -28px rgba(20,24,33,0.45); }
+  .terminal .thead { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; color: var(--muted); padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .terminal .thead .d { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+  .terminal pre { margin: 0; padding: 18px 18px 20px; overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.85; color: var(--ink); }
+  .terminal .c { color: var(--muted); }
+  .terminal .p { color: var(--accent); user-select: none; -webkit-user-select: none; }
+  .terminal .o { color: var(--ok); }
+  .entry { display: grid; gap: 12px; align-content: start; }
+  .entry .card { padding: 15px 17px; }
+  .entry .card h3 { font-family: var(--mono); font-size: 0.86rem; margin: 0 0 4px; }
+  .entry .card p { font-size: 0.88rem; }
+  .entry .card code { color: var(--accent-deep); }
+  @media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } }
+
   footer { border-top: 1px solid var(--line); padding: 26px 0 44px; color: var(--muted); font-family: var(--mono); font-size: 0.76rem; }
   footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
@@ -268,6 +284,7 @@
       <a href="#vorgehen">Vorgehen</a>
       <a href="#umsetzung">Umsetzung</a>
       <a href="#ergebnisse">Ergebnisse</a>
+      <a href="#loslegen">Loslegen</a>
     </nav>
     <span class="pill-live"><span class="g" aria-hidden="true"></span>v0.2 · 719 Tests grün</span>
   </div>
@@ -491,6 +508,64 @@
           </div>
         </div>
         <p class="bottom-line">Kurz: Wir haben <b>ein belastbares, ehrliches Fundament mit einer eigenen These</b> gebaut — der praktische Mehrwert ist gesichert als <b>Prototyp &amp; Machbarkeitsnachweis</b>. Der nächste Schritt, der ihn in <b>gelieferten Nutzen</b> übersetzt: ein echter Anwendungsfall mit echten Nutzern (z.&nbsp;B. <code>migrate</code> gegen reale Daten) statt weiterer Kern-Features.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 05 LOSLEGEN ── -->
+  <section class="block" id="loslegen">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-no">05</span>
+        <div>
+          <h2 class="sec-title">Loslegen</h2>
+          <p class="sec-lede">Offline &amp; deterministisch in unter einer Minute — dann Schritt für Schritt an echte Modelle und Daten. Braucht Node&nbsp;22+ und pnpm&nbsp;10.</p>
+        </div>
+      </div>
+
+      <div class="start-grid reveal">
+        <figure class="terminal">
+          <figcaption class="thead"><span class="d" aria-hidden="true"></span>bash · elio quickstart</figcaption>
+          <pre><code><span class="c"># 1 · klonen, installieren, bauen</span>
+<span class="p">$</span> git clone https://github.com/LeonNonnast/elio
+<span class="p">$</span> pnpm install
+<span class="p">$</span> pnpm build          <span class="c"># Root-Build (nicht  pnpm -r build)</span>
+
+<span class="c"># 2 · ein Feature offline fahren (MockModel, deterministisch)</span>
+<span class="p">$</span> node packages/cli/dist/bin.js run demo.draft-until-good
+<span class="o">  → streamt RunEvents, exit 0 bei gate=passed</span>
+
+<span class="c"># 3 · Studio-Dashboard: live Runs, Loop-Tape, Approval-Inbox</span>
+<span class="p">$</span> node packages/studio/dist/bin.js
+<span class="o">  → http://localhost:4123</span>
+
+<span class="c"># echtes Modell? Provider-Profil pinnen:</span>
+<span class="p">$</span> node packages/cli/dist/bin.js run migrate.csv-to-db \
+      --model ollama:llama3 --max-cost-usd 0.50</code></pre>
+        </figure>
+
+        <div class="entry">
+          <div class="card">
+            <span class="kicker">Einstieg · offline</span>
+            <h3>demo.draft-until-good</h3>
+            <p>Der Outer Loop pur: draften → validieren → wiederholen, bis das Gate hält. Kein Key, kein Netz.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">Reale Vertikale</span>
+            <h3>migrate.csv-to-db</h3>
+            <p>LLM-Mapping CSV→DB mit governtem Commit-<b>Approval</b> — idempotent, per <code>--model</code> auf echte Provider.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">Meta</span>
+            <h3>build-skill</h3>
+            <p>Interviewt einen Brief und schreibt eine Claude-Code <code>SKILL.md</code> — governter fs-Write.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">Einbetten</span>
+            <h3>als MCP oder SDK</h3>
+            <p><code>elio-mcp</code> → Claude ruft governte Loops. Oder <code>import { createRuntime } from "@elio/sdk"</code>.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
