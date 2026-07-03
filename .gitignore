@@ -5,3 +5,6 @@ _bmad
 node_modules/
 dist/
 *.tsbuildinfo
+
+# elio persistent run store (FileRunStore)
+.elio/

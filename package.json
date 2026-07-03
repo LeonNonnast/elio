@@ -4,19 +4,29 @@
   "private": true,
   "type": "module",
   "description": "ELIO — Enterprise Loop Intelligence Orchestrator (artifact-centric Loop-Engine)",
+  "license": "MIT",
   "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/fix-esm-extensions.mjs",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.0",
+    "eslint": "^10.6.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.62.0",
     "vitest": "^3.0.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
   }
 }
