@@ -1,9 +1,21 @@
 {
   "name": "@elio/sdk",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "description": "ELIO TypeScript-SDK: Public API über @elio/core (run/resume, Pack-Loader, Service-Implementierungen).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonnonnast/elio.git",
+    "directory": "packages/sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,9 +26,11 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "dependencies": {
-    "@elio/core": "workspace:*"
+    "@elio/core": "workspace:*",
+    "yaml": "^2.9.0"
   }
 }
