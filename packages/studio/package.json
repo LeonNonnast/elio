@@ -1,0 +1,42 @@
+{
+  "name": "@elio/studio",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "ELIO Studio: lokaler HTTP-Dashboard-Client über @elio/sdk (Inv. 2 — read-mostly, UI nie im SDK). Live-Run-Status, Loop-Tape, Live-Updates (SSE), Approval-Inbox.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonnonnast/elio.git",
+    "directory": "packages/studio"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "elio-studio": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "preview": "tsc -b && node preview/build-preview.mjs"
+  },
+  "dependencies": {
+    "@elio/core": "workspace:*",
+    "@elio/engine": "workspace:*",
+    "@elio/sdk": "workspace:*",
+    "@elio/skill-builder": "workspace:*"
+  }
+}

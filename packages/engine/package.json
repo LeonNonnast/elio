@@ -1,0 +1,38 @@
+{
+  "name": "@elio/engine",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "ELIO Engine-Schicht: zentraler Feature-Katalog (FeatureProvider) + EngineService (LocalEngine/Host/Client). CLI/MCP/Studio sind nur Clients (Inv. 2).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonnonnast/elio.git",
+    "directory": "packages/engine"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
+  },
+  "dependencies": {
+    "@elio/core": "workspace:*",
+    "@elio/sdk": "workspace:*",
+    "@elio/migrate": "workspace:*",
+    "@elio/skill-builder": "workspace:*"
+  }
+}

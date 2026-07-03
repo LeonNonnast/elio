@@ -1,0 +1,41 @@
+{
+  "name": "@elio/mcp",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "ELIO MCP-Server-Surface: exponiert Feature-Packs als MCP-Tools (außen MCP-Server, intern @elio/sdk-Client, Inv. 2/19).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonnonnast/elio.git",
+    "directory": "packages/mcp"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "elio-mcp": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
+  },
+  "dependencies": {
+    "@elio/core": "workspace:*",
+    "@elio/engine": "workspace:*",
+    "@elio/skill-builder": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}
