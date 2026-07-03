@@ -11,15 +11,17 @@
 //   - advance runs a `delegate` step's handler, resolves `{{params.x}}` templates, captures the
 //     handler's `{text}` into run.stateData.text, and COMPLETES the (single-step) run.
 //
-// DELIBERATE DIVERGENCE for v0.2 specs (NOT real-Vela v0.1 behaviour — see vela-bridge.ts RESUME/BLOCK
-// CAVEAT): the synthetic `blockOn` directive makes advance() return { blocked, blockedBy } and leave the
-// run PAUSED. The REAL engine returns blocked:true ONLY for a NEXT step with an unsatisfied depends_on,
-// which the bridge's single delegate step (next:null, no following step) never has — so the real engine
-// can neither block nor leave a PAUSED resume target for this shape. `blockOn` exists purely so the
-// block->Suspended + identity-resume seams can be pinned as behavioural specs ahead of the v0.2 multi-step
-// workflow that will make them reachable on the real path.
+// PAUSE / RESUME model (faithful to Vela's semantics, exercises the real bridge suspend/resume path):
+// the `blockOn` directive makes the FIRST advance() return { blocked, blockedBy } and leave the run
+// PAUSED (mirrors an unsatisfied depends_on). A later advance() that carries `options.resumeAnswer` (the
+// bridge supplies it on the resume turn) does NOT re-block — it runs the delegate and COMPLETEs, mirroring
+// real Vela's advance(run, def, {stepOutput}) unblocking a paused step. Combined with findByIdentity
+// (re-finds ACTIVE/PAUSED runs) this lets the tests drive the genuine identity↔correlation resume roundtrip.
+// The real single-delegate-step shape does not pause on the real engine (its depends_on is empty); a real
+// multi-step/pause-surface workflow is the remaining real-path work (see vela-bridge.ts HONESTY note).
 
 import type {
+  VelaAdvanceOptions,
   VelaAdvanceResult,
   VelaDelegateContext,
   VelaDelegateHandler,
@@ -123,15 +125,26 @@ export class FakeWorkflowEngine implements VelaWorkflowEngine {
     return [run, true];
   }
 
-  async advance(run: VelaRunState, def: VelaWorkflowDefinition): Promise<VelaAdvanceResult> {
+  async advance(
+    run: VelaRunState,
+    def: VelaWorkflowDefinition,
+    options?: VelaAdvanceOptions,
+  ): Promise<VelaAdvanceResult> {
     const step = def.steps.find((s) => s.id === run.currentStep);
     if (!step) {
       run.status = "completed";
       run.currentStep = null;
       return { run, completed: true };
     }
-    // Blocked path: mirror an unsatisfied depends_on (run pauses, no delegate runs).
-    if (this.opts.blockOn !== undefined && this.opts.blockOn.length > 0) {
+    // Blocked path: mirror an unsatisfied depends_on (run pauses, no delegate runs). A RESUME advance
+    // (options.resumeAnswer present) carries the human's answer that satisfies the dependency, so it does
+    // NOT re-block — it falls through and runs the delegate to COMPLETE the paused step (identity↔correlation
+    // resume, Inv. 11/12). This mirrors real Vela's advance(run, def, {stepOutput}) unblocking a paused step.
+    if (
+      this.opts.blockOn !== undefined &&
+      this.opts.blockOn.length > 0 &&
+      options?.resumeAnswer === undefined
+    ) {
       run.status = "paused";
       return { run, completed: false, blocked: true, blockedBy: this.opts.blockOn };
     }
@@ -173,8 +186,8 @@ export function makeVelaDouble(opts: FakeEngineOptions = {}): {
       startOrResume(def: VelaWorkflowDefinition, options?: VelaStartOptions) {
         return this.inner.startOrResume(def, options);
       }
-      advance(run: VelaRunState, def: VelaWorkflowDefinition) {
-        return this.inner.advance(run, def);
+      advance(run: VelaRunState, def: VelaWorkflowDefinition, options?: VelaAdvanceOptions) {
+        return this.inner.advance(run, def, options);
       }
     },
     InMemoryStore: class extends FakeInMemoryStore {

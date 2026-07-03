@@ -126,6 +126,10 @@ export const agentHandler: Node<AgentWith, { output: unknown }> = async (input, 
       depth: parentDepth + 1,
       maxDepth,
       ...(canonical !== undefined ? { routing: { models: [canonical] } } : {}),
+      // Resume (Inv. 11/12): setzt der Runner ctx.resume (nur am wieder-ausgeführten suspendierten Step),
+      // reicht die Node die Antwort in den Contract — eine Engine mit persistenter Session (Vela) setzt
+      // damit ihren pausierten Inner Loop fort, statt frisch zu starten.
+      ...(ctx.resume !== undefined ? { resume: { answer: ctx.resume.answer } } : {}),
     };
     const sr = await ctx.agent.session(contract);
     const mapped = fromSessionResult(sr);

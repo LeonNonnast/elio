@@ -63,69 +63,41 @@ describe("VelaAgentEngine — identity + transparency (Inv. 12/17/18)", () => {
     expect(registry.resolve(ELIO_MODEL_DELEGATE)).toBeTypeOf("function");
   });
 
-  it("[DOUBLE-ONLY, v0.2 spec] resume-mapping round-trip: ELIO correlation <-> Vela identity re-finds the SAME run", async () => {
-    // SCOPE: this is a behavioural spec for the FUTURE v0.2 multi-step shape, exercised against the
-    // deterministic double — NOT real-Vela v0.1 conformance. On the real engine the single-delegate-step
-    // run always COMPLETEs (resolveNext -> null -> "No next step — complete"), so findByIdentity (which
-    // only re-finds ACTIVE/PAUSED runs) never has a resume target and runVelaTurn never re-finds a run
-    // across turns (see vela-bridge.ts RESUME/BLOCK CAVEAT). To keep a run alive as a resume target here
-    // we build a double whose engine BLOCKS (paused) — a state the real one-step engine cannot produce —
-    // and then drive startOrResume MANUALLY over the SAME store (the adapter itself uses a fresh store per
-    // turn). This locks in the identity<->correlation mapping for when v0.2 makes it reachable.
+  it("suspend/resume: a paused turn re-finds its run by ctx.correlation identity and completes with the answer (Inv. 11/12)", async () => {
+    // The genuine identity↔correlation resume roundtrip THROUGH the engine (no manual startOrResume): the
+    // engine owns ONE persistent store, so a paused run survives until the resume turn re-finds it by its
+    // resume-stable identity key (run::branch::step). The double's blockOn models the pause; supplying
+    // contract.resume on the second turn unblocks it (mirrors real Vela advance(run,def,{stepOutput})).
     const { module, stores } = makeVelaDouble({ blockOn: ["needs_input"] });
-    const s = scriptedModel(["unused"]);
+    const s = scriptedModel(["resumed reply"]);
     const eng = new VelaAgentEngine({ velaLoader: () => Promise.resolve(module) });
+    const ctx = ctxWith({ model: s.model });
 
-    // First turn: blocks -> the run is PAUSED and persisted under the correlation identity.
-    const sr1 = await eng.run(
-      { input: { prompt: "go" }, budget: 100, depth: 1, maxDepth: 5 },
-      ctxWith({ model: s.model }),
-    );
-    expect("elicitation" in sr1).toBe(true); // blocked -> Suspended/elicitation up (Inv. 11)
-
-    // A single store backs the engine-built runs; find the paused run under the correlation key.
+    // Turn 1: blocks -> Suspended (Inv. 11). No model call yet; the run is PAUSED in the engine's store.
+    const sr1 = await eng.run({ input: { prompt: "go" }, budget: 100, depth: 1, maxDepth: 5 }, ctx);
+    expect("elicitation" in sr1).toBe(true);
+    expect(s.calls()).toBe(0);
     const store = stores[0]!;
-    const paused = [...store.runs.values()].filter((r) => r.status === "paused");
-    expect(paused.length).toBe(1);
-    const firstId = paused[0]!.id;
-    const corrValue = paused[0]!.params["elioCorrelation"];
-    expect(typeof corrValue).toBe("string");
+    expect([...store.runs.values()].filter((r) => r.status === "paused").length).toBe(1);
 
-    // Resume: a fresh startOrResume against the SAME store + SAME identity re-finds the same run.
-    const Engine = module.DefaultWorkflowEngine;
-    const engine = new Engine(store);
-    const [reFound, created] = await engine.startOrResume(
-      {
-        id: "elio.inner-session",
-        version: "1.0.0",
-        name: "n",
-        description: "",
-        params: [
-          {
-            name: "elioCorrelation",
-            required: false,
-            identity: true,
-            application: false,
-            resolve: false,
-          },
-        ],
-        context: null,
-        lifecycle: null,
-        tools: [],
-        resources: [],
-        steps: [],
-      },
-      { params: { elioCorrelation: corrValue } },
+    // Turn 2 (resume): SAME ctx.correlation + contract.resume -> re-finds the paused run, unblocks, routes
+    // the model call through ctx.model (Inv. 18), and RESOLVES.
+    const sr2 = await eng.run(
+      { input: { prompt: "go" }, budget: 100, depth: 1, maxDepth: 5, resume: { answer: "proceed" } },
+      ctx,
     );
-    expect(created).toBe(false); // re-found, not created fresh (Inv. 12)
-    expect(reFound.id).toBe(firstId); // SAME Vela run id — the correlation round-trips
+    if (!("result" in sr2) || sr2.result.status !== "resolved") throw new Error("expected resolved");
+    expect((sr2.result.output as { text: string }).text).toBe("resumed reply");
+    expect(s.calls()).toBe(1); // the model call happened ONLY on the resume turn
+    // The paused run was resumed to completion, not left dangling nor duplicated.
+    expect([...store.runs.values()].filter((r) => r.status === "paused").length).toBe(0);
+    expect([...store.runs.values()].length).toBe(1); // re-found the SAME run (no fresh create)
   });
 
-  it("[DOUBLE-ONLY, v0.2 spec] propagates a Vela block/pause UP as an ELIO Suspended/elicitation (Inv. 11)", async () => {
-    // SCOPE: behavioural spec via the double, NOT real-Vela v0.1 conformance. The real engine returns
-    // blocked:true ONLY inside `if(nextStepId)` after a failed validateDependsOn; the single delegate step
-    // has no next step, so advance() can never block (vela-bridge.ts RESUME/BLOCK CAVEAT). This pins the
-    // block->Suspended wiring for the v0.2 multi-step shape, driven by the double's synthetic blockOn.
+  it("propagates a Vela block/pause UP as an ELIO Suspended/elicitation (Inv. 11)", async () => {
+    // The block->Suspended wiring, driven by the double's blockOn (which models an unsatisfied depends_on /
+    // pause surface). The single-delegate-step shape does not pause on the REAL engine (empty depends_on);
+    // a real multi-step/pause-surface workflow is the remaining real-path work (vela-bridge.ts HONESTY note).
     const { module } = makeVelaDouble({ blockOn: ["target_schema"] });
     const s = scriptedModel(["unused"]);
     const eng = new VelaAgentEngine({ velaLoader: () => Promise.resolve(module) });

@@ -71,13 +71,27 @@ export interface VelaStartOptions {
   parentStepId?: string | null;
 }
 
+/**
+ * Options the bridge passes to advance() (subset of vela-sdk's AdvanceOptions). On a RESUME turn the
+ * bridge supplies `resumeAnswer` — the human's answer to the elicitation that paused the run — so the
+ * engine can unblock the paused step (real Vela accepts `options.stepOutput`/`notes`; we mirror the
+ * narrow slice the bridge needs). Absent on a first turn.
+ */
+export interface VelaAdvanceOptions {
+  resumeAnswer?: unknown;
+}
+
 /** Mirrors vela-sdk IWorkflowEngine (the two methods the bridge drives). */
 export interface VelaWorkflowEngine {
   startOrResume(
     workflowDef: VelaWorkflowDefinition,
     options?: VelaStartOptions,
   ): Promise<[VelaRunState, boolean]>;
-  advance(run: VelaRunState, workflowDef: VelaWorkflowDefinition): Promise<VelaAdvanceResult>;
+  advance(
+    run: VelaRunState,
+    workflowDef: VelaWorkflowDefinition,
+    options?: VelaAdvanceOptions,
+  ): Promise<VelaAdvanceResult>;
 }
 
 /** Mirrors vela-sdk WorkflowStore (only findByIdentity is referenced directly). */

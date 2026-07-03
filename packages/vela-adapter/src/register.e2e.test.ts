@@ -83,10 +83,10 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     expect(registry.resolve("elio-model")).toBeTypeOf("function");
   });
 
-  it("[DOUBLE-ONLY, v0.2 spec] a Vela block propagates UP through ELIOs stack as a node-suspended event", async () => {
-    // SCOPE: behavioural spec via the double, NOT real-Vela v0.1 conformance. The real single-delegate-step
-    // engine cannot return blocked:true (vela-bridge.ts RESUME/BLOCK CAVEAT); the double's synthetic blockOn
-    // stands in for the v0.2 multi-step shape so we can verify the block->node-suspended propagation seam.
+  it("a Vela block propagates UP through ELIOs stack as a node-suspended event (Inv. 11)", async () => {
+    // The block->node-suspended propagation seam, driven by the double's blockOn (models an unsatisfied
+    // depends_on / pause surface). The single-delegate-step shape does not pause on the REAL engine; a real
+    // multi-step/pause-surface workflow is the remaining real-path work (vela-bridge.ts HONESTY note).
     const { module } = makeVelaDouble({ blockOn: ["target_schema"] });
     const rt = createVelaRuntime({
       models: { mock: new MockModel() },
@@ -107,6 +107,58 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     );
     expect(suspended).toBeDefined();
     expect(suspended!.elicitation.what).toMatch(/blockiert|target_schema/i);
+  });
+
+  it("suspend -> resume roundtrip through the runtime: a blocked Vela turn resumes to completion (Inv. 11/12)", async () => {
+    // Full stack: the agent node suspends on the Vela block, the runner checkpoints it, and rt.resume(corr,
+    // answer) re-drives the SAME step. The runner sets ctx.resume ONLY on that step; the agent node forwards
+    // it as contract.resume; the SAME (persistent-store-backed) Vela engine re-finds its paused run by the
+    // resume-stable identity key, unblocks it, routes the model call through ctx.model, and RESOLVES.
+    const { module } = makeVelaDouble({ blockOn: ["needs_input"] });
+    const rt = createVelaRuntime({
+      models: { mock: new MockModel({ transform: (str) => `drafted: ${str}` }) },
+      defaultModel: "mock",
+      rootPolicy: rootPolicy({ allowedModels: ["mock"] }),
+      vela: { velaLoader: () => Promise.resolve(module) },
+    });
+    rt.registry.register(passGate as unknown as NodeDefinition);
+
+    // Turn 1: run until it suspends on the Vela block.
+    const first: RunEvent[] = [];
+    for await (const ev of rt.run(velaAgentPack(), { payload: {}, budget: 100, maxDepth: 5 })) {
+      first.push(ev);
+    }
+    const suspended = first.find(
+      (e): e is Extract<RunEvent, { type: "node-suspended" }> =>
+        e.type === "node-suspended" && e.correlation.step === "delegate",
+    );
+    expect(suspended).toBeDefined();
+    expect(first.some((e) => e.type === "run-completed")).toBe(false); // it really suspended
+
+    // Turn 2: resume with the human answer -> the delegate resolves, the gate passes, the run completes.
+    const resumed: RunEvent[] = [];
+    for await (const ev of rt.resume(suspended!.correlation, "yes, proceed")) {
+      resumed.push(ev);
+    }
+    expect(
+      resumed.some((e) => e.type === "node-resolved" && e.correlation.step === "delegate"),
+    ).toBe(true);
+    const done = resumed.find((e) => e.type === "run-completed");
+    expect(done).toBeDefined();
+    if (done?.type === "run-completed") expect(done.gate).toBe("passed");
+    // The resumed delegate's reply was produced by routing through ctx.model (Inv. 18): the mock transform
+    // ran on the agent prompt. Read it off the resumed delegate's tape frame.
+    const runId = first.find((e) => e.type === "run-started")!.correlation.run;
+    const delegateFrame = rt.store
+      .getTape(runId)
+      .filter((f) => f.nodeType === "agent")
+      .at(-1);
+    expect(delegateFrame?.result.status).toBe("resolved");
+    if (delegateFrame?.result.status === "resolved") {
+      // raw node output is { output: <engine reply> }; the Vela engine's reply is { text }.
+      const out = (delegateFrame.result.output as { output?: { text?: string } }).output;
+      expect(out?.text).toBe("drafted: draft the note");
+    }
   });
 
   it("registerVelaAdapter adapts an existing runtime, reusing its store + registry", async () => {

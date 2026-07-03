@@ -564,7 +564,7 @@ export class OuterLoopRunner implements Runner {
         // die Antwort an GENAU die wartende Elicitation gebunden — eine spätere, andere Elicitation im
         // selben Branch wird NICHT mit-aufgelöst (keine Cross-Elicitation-Contamination, Inv. 11/12 / §6).
         // Der Run-Ebene-Resolver bleibt `by:"human"` (drive() emittiert es für die resumeFrom-correlation).
-        yield* this.drive(rc.pack, rc.input, id.run, id.branch, rc.artifact, budget, state, resume.lastStepId, id, resume.childGraph);
+        yield* this.drive(rc.pack, rc.input, id.run, id.branch, rc.artifact, budget, state, resume.lastStepId, id, resume.childGraph, { answer });
     }
     // ───────────────────────────── Root-Branch-Driver ─────────────────────────────
     //
@@ -589,6 +589,8 @@ export class OuterLoopRunner implements Runner {
         resumeFrom?: CorrelationId,
         /** Bei einem KIND-Branch-Resume: der synthetische Kind-Graph (sonst der Feature-Graph). */
         childGraph?: GraphDefinition,
+        /** Resume-Antwort (Inv. 11/12): nur beim Resume gesetzt, wird an den ERSTEN (suspendierten) Step gereicht. */
+        resumeAnswer?: { answer: unknown },
     ): AsyncIterable<RunEvent> {
         void input;
         const isChildResume = childGraph !== undefined;
@@ -626,7 +628,7 @@ export class OuterLoopRunner implements Runner {
                 this.emit(ev);
                 yield ev;
             }
-            const stepsGen = this.runBranchSteps(pack, runId, branch, artifact, budget, state, graph, gateType, startLastStepId);
+            const stepsGen = this.runBranchSteps(pack, runId, branch, artifact, budget, state, graph, gateType, startLastStepId, resumeAnswer);
             const outcome = yield* stepsGen;
             const total = { usd: budget.charged() };
             // Kind-Branch-Resume (Slice 2B): ein parked Kind wurde resumed und lief durch -> seinen
@@ -694,10 +696,14 @@ export class OuterLoopRunner implements Runner {
         graph: GraphDefinition,
         gateType: string | undefined,
         startLastStepId: string | undefined,
+        resumeAnswer?: { answer: unknown },
     ): AsyncGenerator<RunEvent, BranchOutcome, void> {
         const packVersion = pack.contentHash ?? pack.metadata.version;
         const isChild = branch.includes("/"); // Kind-Branch-id = parentBranch + "/" + itemId
         let lastStepId = startLastStepId;
+        // Resume-Antwort wird GENAU an den ersten wieder-ausgeführten (= suspendierten) Step gereicht
+        // und danach konsumiert (nachfolgende Steps in dieser Iteration sind Erst-Läufe).
+        let pendingResume = resumeAnswer;
         let total: Cost = { usd: budget.charged() };
         const corr = (step: string, checkpoint: string): CorrelationId => ({
             run: runId,
@@ -774,7 +780,8 @@ export class OuterLoopRunner implements Runner {
             // (Inv. 21): ctx.cost bindet daran, sodass ein delegierter agent-Call das echte Restbudget +
             // die Tiefe dieses Branches erbt (nie ein frisches).
             const parentPolicy = this.resolveRoot(pack);
-            const ctx = this.injector.buildCtx(node, parentPolicy, correlation, artifact, budget);
+            const ctx = this.injector.buildCtx(node, parentPolicy, correlation, artifact, budget, pendingResume);
+            pendingResume = undefined; // nur der erste (suspendierte) Step erhält die Resume-Antwort.
             // 8: Node mit Retry ausführen (reine Funktion, Inv. 5). stepRef.suspend -> input.mode.
             const nodeInput = withSuspendMode(resolveInput(step, state), step);
             const result = await tryWithRetry(node, nodeInput, ctx, this.sandbox);

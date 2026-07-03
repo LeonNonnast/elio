@@ -72,5 +72,7 @@ export interface Injector {
      * (agent-Node -> AgentEngine) über ctx.cost das echte Restbudget + die Tiefe (nie ein frisches).
      * Fehlt er, fällt der Injector auf seinen optional konfigurierten Default-Tracker zurück.
      */
-    buildCtx(node: NodeDefinition, parent: ResolvedPolicy, correlation: CorrelationId, artifact: Artifact, budget?: BudgetTracker): Ctx;
+    buildCtx(node: NodeDefinition, parent: ResolvedPolicy, correlation: CorrelationId, artifact: Artifact, budget?: BudgetTracker, resume?: {
+        answer: unknown;
+    }): Ctx;
 }

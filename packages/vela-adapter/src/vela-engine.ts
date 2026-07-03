@@ -42,7 +42,7 @@ import { InProcessAgentEngine } from "@elio/sdk";
 import type { InProcessAgentEngineOptions } from "@elio/sdk";
 import { blockedElicitation, runVelaTurn } from "./vela-bridge";
 import { defaultVelaModuleLoader } from "./loader";
-import type { VelaModule, VelaModuleLoader } from "./vela-contract";
+import type { VelaModule, VelaModuleLoader, VelaWorkflowStore } from "./vela-contract";
 
 export interface VelaAgentEngineOptions extends InProcessAgentEngineOptions {
   /**
@@ -69,6 +69,13 @@ export class VelaAgentEngine implements AgentEngine {
   /** Memoised module load (null = tried-and-unavailable). */
   private velaModule: VelaModule | null | undefined;
   private loadAttempted = false;
+  /**
+   * ONE Vela store for the lifetime of this engine (identity↔correlation, Inv. 12). It OUTLIVES a single
+   * turn so a paused run survives until its resume turn re-finds it via findByIdentity. Created lazily
+   * from the loaded module. (In-memory: same-process suspend/resume; a durable cross-process store is
+   * later work — the FileRunStore-analogue for Vela.)
+   */
+  private velaStore: VelaWorkflowStore | undefined;
 
   constructor(opts: VelaAgentEngineOptions = {}) {
     this.loader =
@@ -124,8 +131,11 @@ export class VelaAgentEngine implements AgentEngine {
       return this.fallback.run(contract, ctx);
     }
 
+    // Lazily create the ONE persistent store (identity↔correlation, Inv. 12) from the loaded module.
+    if (this.velaStore === undefined) this.velaStore = new vela.InMemoryStore();
+
     try {
-      const turn = await runVelaTurn(vela, contract, ctx);
+      const turn = await runVelaTurn(vela, contract, ctx, this.velaStore);
       if (turn.blocked !== undefined) {
         // Vela paused/blocked -> propagate UP as an ELIO Suspended (Inv. 11). UNREACHABLE on the real
         // v0.1 single-step engine (see header NOT-YET note + vela-bridge RESUME/BLOCK CAVEAT); fires only

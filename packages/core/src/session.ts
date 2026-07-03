@@ -12,6 +12,13 @@ export interface SessionContract {
     budget: number;
     depth: number;
     maxDepth: number;
+    /**
+     * Resume-Antwort (Inv. 11/12, §v0.2): gesetzt, wenn dieser Turn einen zuvor suspendierten Inner Loop
+     * FORTSETZT (der Agent hatte via Elicitation eine Frage hochpropagiert). Eine Engine mit persistenter
+     * Session (z.B. Vela via identity↔correlation) re-findet ihren pausierten Run und advanced ihn mit
+     * dieser Antwort; fehlt sie, ist es ein Erst-Turn. Opake Engines dürfen sie als Task-Input behandeln.
+     */
+    resume?: { answer: unknown };
 }
 /** hoch: Ergebnis ODER Elicitation. */
 export type SessionResult = {

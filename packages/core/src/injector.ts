@@ -408,6 +408,7 @@ export class PolicyInjector implements Injector {
     correlation: CorrelationId,
     artifact: Artifact,
     budget?: BudgetTracker,
+    resume?: { answer: unknown },
   ): Ctx {
     const resolved = tighten(parent, node.requests);
     // Pflicht-Felder: immer present.
@@ -415,6 +416,7 @@ export class PolicyInjector implements Injector {
       correlation: CorrelationId;
       artifact: Artifact;
       policy: ResolvedPolicy;
+      resume?: { answer: unknown };
       model?: ModelService;
       agent?: AgentService;
       logger?: LoggerService;
@@ -434,6 +436,10 @@ export class PolicyInjector implements Injector {
       artifact,
       policy: resolved,
     };
+    // resume (Inv. 11/12): nur beim Re-Drive des suspendierten Steps gesetzt — der Runner reicht die
+    // (menschliche) Antwort GENAU an diesen einen Step; ein Multi-Turn-Agent liest sie und setzt seine
+    // pausierte Session fort. Andere Nodes ignorieren sie (harmlos present).
+    if (resume !== undefined) ctx.resume = resume;
     // cross-cutting Services (kein Step, Inv. 5) — injiziert, wenn vom Injector bereitgestellt.
     if (this.deps.logger !== undefined) ctx.logger = this.deps.logger;
     if (this.deps.audit !== undefined) ctx.audit = this.deps.audit;

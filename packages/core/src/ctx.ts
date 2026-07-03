@@ -135,9 +135,20 @@ export interface ScriptRunnerService {
     /** `source` = ein Funktions-Ausdruck, z.B. "function (input) { … }" oder "(input) => …". */
     run(source: string, input: unknown, opts?: ScriptRunOptions): Promise<ScriptRunResult>;
 }
+/**
+ * Resume-Kontext (Inv. 11/12, §v0.2). Der Runner setzt ihn NUR am wieder-ausgeführten suspendierten
+ * Step: die (vom Menschen) hinterlegte Antwort, die diesen Step fortsetzt. Ein Multi-Turn-Agent (Vela/
+ * Claude) reicht sie in seinen `SessionContract.resume` weiter, damit die pausierte Inner-Loop-Session
+ * mit der Antwort fortgesetzt wird (statt frisch zu starten). Fehlt er, ist es ein normaler (Erst-)Lauf.
+ */
+export interface ResumeContext {
+    readonly answer: unknown;
+}
 export interface Ctx {
     readonly correlation: CorrelationId;
     readonly artifact: Artifact;
+    /** Nur beim Re-Drive eines suspendierten Steps gesetzt (Inv. 11/12) — siehe ResumeContext. */
+    readonly resume?: ResumeContext;
     readonly model?: ModelService;
     readonly agent?: AgentService;
     readonly logger?: LoggerService;
