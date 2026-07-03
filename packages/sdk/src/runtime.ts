@@ -20,6 +20,7 @@ import type {
   FeaturePack,
   FeatureResolver,
   FsService,
+  HttpService,
   Injector,
   ModelService,
   Redactor,
@@ -93,6 +94,12 @@ export interface RuntimeOptions {
    * dbScopes. Default: kein Backend -> kein ctx.db.
    */
   db?: DbService;
+  /**
+   * HttpService-Backend hinter ctx.http (Inv. 14, §v0.2). Wie fs/db gegated: ctx.http nur bei
+   * nichtleeren httpHosts. Der Injector wrappt das Backend zusätzlich in seinen policy-gescopten
+   * ScopedHttpService (per-Call Host-Check, defense in depth). Default: kein Backend -> kein ctx.http.
+   */
+  http?: HttpService;
   /**
    * Tape-Redactor (§11/#9). Default = ein frischer TapeRedactor, der mit dem Injector geteilt wird:
    * jeder von ctx.secrets aufgelöste Wert wird hier registriert und auto-redacted aus dem Loop Tape.
@@ -202,6 +209,7 @@ export function createRuntime(opts: RuntimeOptions = {}): Runtime {
       ...(opts.secretsProvider !== undefined ? { secretsProvider: opts.secretsProvider } : {}),
       ...(opts.fs !== undefined ? { fs: opts.fs } : {}),
       ...(opts.db !== undefined ? { db: opts.db } : {}),
+      ...(opts.http !== undefined ? { http: opts.http } : {}),
       ...(redactor !== undefined ? { redactor } : {}),
     });
 

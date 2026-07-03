@@ -12,6 +12,7 @@ import type {
   CorrelationId,
   DbService,
   FsService,
+  HttpService,
   ModelService,
   NodeDefinition,
 } from "@elio/core";
@@ -28,6 +29,7 @@ const fs: FsService = {
   write: () => Promise.resolve(),
 };
 const db: DbService = { query: () => Promise.resolve([{ ok: true }]) };
+const http: HttpService = { fetch: (url: string) => Promise.resolve({ url, body: "ok" }) };
 
 function node(over: Partial<NodeDefinition> = {}): NodeDefinition {
   return {
@@ -127,6 +129,49 @@ describe("PolicyInjector — security by absence (Inv. 14)", () => {
       artifact,
     );
     expect(noScope.db).toBeUndefined();
+  });
+
+  it("http is injected (scoped) only when resolved.httpHosts is non-empty; enforces host per call", async () => {
+    const parent = rootPolicy({ httpHosts: ["api.example.com"] });
+    const injector = new PolicyInjector({ http });
+    const ctx = injector.buildCtx(
+      node({ requests: { http: ["api.example.com"] } }),
+      parent,
+      corr,
+      artifact,
+    );
+    expect(ctx.http).toBeDefined();
+    // in-scope host resolves; out-of-scope host and a non-URL are rejected by the scoped wrapper.
+    await expect(ctx.http!.fetch("https://api.example.com/v1/x")).resolves.toBeDefined();
+    await expect(ctx.http!.fetch("https://evil.com/steal")).rejects.toThrow(/denied|out of scope/i);
+    await expect(ctx.http!.fetch("not-a-url")).rejects.toThrow(/denied|valid absolute URL/i);
+  });
+
+  it("http is NOT injected when the requested host is outside the parent grant", () => {
+    const parent = rootPolicy({ httpHosts: ["api.example.com"] });
+    const injector = new PolicyInjector({ http });
+    const noHost = injector.buildCtx(
+      node({ requests: { http: ["evil.com"] } }), // evil.com not in parent -> empty intersection
+      parent,
+      corr,
+      artifact,
+    );
+    expect(noHost.http).toBeUndefined();
+  });
+
+  it('a "*" host request expands only to the parent-granted hosts (no widening)', async () => {
+    const parent = rootPolicy({ httpHosts: ["api.example.com"] });
+    const injector = new PolicyInjector({ http });
+    const ctx = injector.buildCtx(
+      node({ requests: { http: ["*"] } }),
+      parent,
+      corr,
+      artifact,
+    );
+    expect(ctx.http).toBeDefined();
+    // "*" in the REQUEST resolved to the parent's single host — NOT any host.
+    await expect(ctx.http!.fetch("https://api.example.com/x")).resolves.toBeDefined();
+    await expect(ctx.http!.fetch("https://evil.com/x")).rejects.toThrow(/denied|out of scope/i);
   });
 
   it("serviceKeys reports exactly the injected capabilities (audit = what was possible)", () => {

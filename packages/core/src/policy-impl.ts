@@ -68,6 +68,7 @@ export function rootPolicy(overrides?: Partial<ResolvedPolicy>): ResolvedPolicy 
   merged.allowedModels = [...merged.allowedModels];
   merged.toolPermissions = [...merged.toolPermissions];
   if (merged.dbScopes !== undefined) merged.dbScopes = [...merged.dbScopes];
+  if (merged.httpHosts !== undefined) merged.httpHosts = [...merged.httpHosts];
   if (merged.fsPaths !== undefined) {
     merged.fsPaths = { read: [...merged.fsPaths.read], write: [...merged.fsPaths.write] };
   }
@@ -147,6 +148,9 @@ export function tighten(parent: ResolvedPolicy, req?: CapabilityRequest): Resolv
   // DB-Scopes: dito (parent kann undefined sein = nichts erlaubt).
   const parentDb = parent.dbScopes ?? [];
   const dbScopes = r.db === undefined ? undefined : intersect(parentDb, r.db);
+  // HTTP-Hosts: dito (Host-Mengen-Schnitt mit "*"-Semantik, analog db). Parent leer = kein Netz.
+  const parentHttp = parent.httpHosts ?? [];
+  const httpHosts = r.http === undefined ? undefined : intersect(parentHttp, r.http);
   // fs: gewünschte Pfade ∩ erlaubte Präfixe.
   const parentFs = parent.fsPaths ?? { read: [], write: [] };
   let fsPaths: ResolvedPolicy["fsPaths"];
@@ -164,6 +168,7 @@ export function tighten(parent: ResolvedPolicy, req?: CapabilityRequest): Resolv
     toolPermissions,
   };
   if (dbScopes !== undefined) resolved.dbScopes = dbScopes;
+  if (httpHosts !== undefined) resolved.httpHosts = httpHosts;
   if (fsPaths !== undefined) resolved.fsPaths = fsPaths;
   // maxCostUsd: min(parent, req/policy) — RESOLVED, aber in v0.1 NICHT enforced (siehe ResolvedPolicy-
   // Doc). Die harte Budget-Durchsetzung läuft run-weit über den BudgetTracker (Inv. 21); ein
@@ -193,6 +198,7 @@ export function enforceTightenOnly(from: ResolvedPolicy, candidate: ResolvedPoli
   const fromModels = new Set(from.allowedModels);
   const fromTools = new Set(from.toolPermissions);
   const fromDb = new Set(from.dbScopes ?? []);
+  const fromHttp = new Set(from.httpHosts ?? []);
   const result: ResolvedPolicy = {
     // Mengen können nur schrumpfen: behalte nur, was schon in `from` war.
     allowedModels: candidate.allowedModels.filter((m) => fromModels.has(m)),
@@ -206,6 +212,10 @@ export function enforceTightenOnly(from: ResolvedPolicy, candidate: ResolvedPoli
   // db: nur Schnitt mit erlaubten.
   if (candidate.dbScopes !== undefined || from.dbScopes !== undefined) {
     result.dbScopes = (candidate.dbScopes ?? []).filter((d) => fromDb.has(d));
+  }
+  // http: nur Schnitt mit erlaubten Hosts.
+  if (candidate.httpHosts !== undefined || from.httpHosts !== undefined) {
+    result.httpHosts = (candidate.httpHosts ?? []).filter((h) => fromHttp.has(h));
   }
   // fs: gewünschte Pfade müssen unter den vorherigen Präfixen liegen.
   if (candidate.fsPaths !== undefined || from.fsPaths !== undefined) {

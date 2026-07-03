@@ -125,6 +125,8 @@ export { ScopedFsService } from "./services/fs";
 export type { ScopedFsServiceOptions } from "./services/fs";
 export { InMemoryDbService } from "./services/db";
 export type { InMemoryDbServiceOptions } from "./services/db";
+export { ScopedHttpService } from "./services/http";
+export type { ScopedHttpServiceOptions } from "./services/http";
 
 // ───────────────────────────── Process-Mining: pm.discover Setup-Fassade (Doc §3.3, Slice 3a) ─────────────────────────────
 export { setupProcessMining, registerProcessMining } from "./setup-process-mining";

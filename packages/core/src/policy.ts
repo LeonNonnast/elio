@@ -12,11 +12,12 @@ export interface CapabilityRequest {
     };
     db?: string[];
     /**
-     * http-Request-Achse. v0.1: INERT — tighten() ignoriert sie, der Injector setzt nie ctx.http, kein
-     * built-in Node nutzt sie (http ist COULD-tier, aufgeschoben). Sie steht im Typ-Surface, gewährt aber
-     * KEINEN Netzzugang; die Injektion ist späteren Slices vorbehalten. Nicht als aktive Capability lesen.
+     * http-Request-Achse (§v0.2): erlaubte Hosts, analog zu `db`-Scopes. Ein Eintrag ist ein Host
+     * (z.B. "api.example.com") oder "*" für "jeder Host". Leer/fehlend = kein Netzzugang. tighten()
+     * schneidet gegen den Parent (nur verschärfen, Inv. 13); der Injector setzt `ctx.http` NUR, wenn
+     * nach dem Verschärfen Hosts übrig bleiben (security by absence, Inv. 14).
      */
-    http?: boolean;
+    http?: string[];
     tools?: string[];
 }
 export interface ResolvedPolicy {
@@ -37,6 +38,11 @@ export interface ResolvedPolicy {
         write: string[];
     };
     dbScopes?: string[];
+    /**
+     * Erlaubte HTTP-Hosts nach dem Verschärfen (§v0.2), analog zu `dbScopes`. "*" = jeder Host.
+     * Fehlt/leer -> der Injector setzt kein `ctx.http` (security by absence, Inv. 14).
+     */
+    httpHosts?: string[];
     toolPermissions: string[];
 }
 export interface Policy {

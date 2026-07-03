@@ -121,6 +121,39 @@ class ScopedDbService implements DbService {
 }
 
 /**
+ * http-Wrapper, der jeden fetch() gegen die resolvten Hosts prüft (defense in depth wie ScopedFsService —
+ * NICHT nur gating-by-injection). Anders als db (dessen query() eine bereits gescopte Connection trifft)
+ * adressiert ein einzelnes fetch(url) einen BELIEBIGEN Host, also muss die Host-Erlaubnis pro Call geprüft
+ * werden. "*" in den Hosts = jeder Host erlaubt. Eine nicht-parsebare URL wird abgelehnt (kein stiller
+ * Durchlass). Der Host-Vergleich ist case-insensitive auf `URL.hostname` (ohne Port).
+ */
+class ScopedHttpService implements HttpService {
+  private readonly anyHost: boolean;
+  private readonly hosts: Set<string>;
+
+  constructor(
+    private readonly inner: HttpService,
+    hosts: string[],
+  ) {
+    this.anyHost = hosts.includes("*");
+    this.hosts = new Set(hosts.map((h) => h.toLowerCase()));
+  }
+
+  fetch(url: string, init?: unknown): Promise<unknown> {
+    let host: string;
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch {
+      return Promise.reject(new Error(`http.fetch denied for "${url}" (not a valid absolute URL)`));
+    }
+    if (!this.anyHost && !this.hosts.has(host)) {
+      return Promise.reject(new Error(`http.fetch denied for "${host}" (out of scope)`));
+    }
+    return this.inner.fetch(url, init);
+  }
+}
+
+/**
  * Normalisiert einen Pfad (kollabiert "..", ".", doppelte Separatoren) und prüft, ob er unter (oder
  * gleich) einem erlaubten Präfix liegt. Spiegelt die Backend-Schicht (SDK ScopedFsService.confine):
  * `resolve()` macht aus "/data/../etc/passwd" -> "/etc/passwd", das NICHT mehr unter "/data" liegt —
@@ -315,9 +348,10 @@ export interface PolicyInjectorDeps {
   logger?: LoggerService;
   /** Optionaler Audit-Service (cross-cutting). */
   audit?: AuditService;
-  /** Optionale konkrete fs/db-Backends; gescopt injiziert nur bei erlaubten Pfaden/Scopes. */
+  /** Optionale konkrete fs/db/http-Backends; gescopt injiziert nur bei erlaubten Pfaden/Scopes/Hosts. */
   fs?: FsService;
   db?: DbService;
+  http?: HttpService;
   /**
    * Secret-Provider hinter ctx.secrets (§11/#8). Wie fs/db gegated: ctx.secrets wird NUR injiziert,
    * wenn die resolvte Policy mindestens einen "secret:<name>"-toolPermission trägt (security by
@@ -447,6 +481,10 @@ export class PolicyInjector implements Injector {
     // db: NUR wenn resolved.dbScopes gesetzt & nichtleer.
     if (resolved.dbScopes !== undefined && resolved.dbScopes.length > 0 && this.deps.db !== undefined) {
       ctx.db = new ScopedDbService(this.deps.db, resolved.dbScopes);
+    }
+    // http: NUR wenn resolved.httpHosts gesetzt & nichtleer — gescopter Wrapper (per-Call Host-Check).
+    if (resolved.httpHosts !== undefined && resolved.httpHosts.length > 0 && this.deps.http !== undefined) {
+      ctx.http = new ScopedHttpService(this.deps.http, resolved.httpHosts);
     }
     // secrets: NUR wenn die resolvte Policy mindestens einen "secret:<name>"-toolPermission trägt
     // UND ein Provider verdrahtet ist (security by absence, §11/#8). Die gescopte Sicht resolved nur
