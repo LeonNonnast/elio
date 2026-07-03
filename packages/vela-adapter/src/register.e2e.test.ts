@@ -29,8 +29,8 @@ const passGate: NodeDefinition<unknown, GateVerdict> = {
     } satisfies Resolved<GateVerdict>),
 };
 
-/** A feature with one `agent` step routed to the "vela" engine. */
-function velaAgentPack(): FeaturePack {
+/** A feature with one `agent` step routed to the "vela" engine. `awaitHuman` opts into the HITL gate. */
+function velaAgentPack(awaitHuman = false): FeaturePack {
   return {
     apiVersion: "elio/v1",
     kind: "Feature",
@@ -47,7 +47,7 @@ function velaAgentPack(): FeaturePack {
             id: "delegate",
             type: "agent",
             // routing.agentEngine="vela" — the injector binds the wired Vela engine behind ctx.agent.
-            with: { prompt: "draft the note" },
+            with: { prompt: "draft the note", ...(awaitHuman ? { awaitHuman: true } : {}) },
             outputs: { reply: "state.reply" },
           },
         ],
@@ -83,11 +83,10 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     expect(registry.resolve("elio-model")).toBeTypeOf("function");
   });
 
-  it("a Vela block propagates UP through ELIOs stack as a node-suspended event (Inv. 11)", async () => {
-    // The block->node-suspended propagation seam, driven by the double's blockOn (models an unsatisfied
-    // depends_on / pause surface). The single-delegate-step shape does not pause on the REAL engine; a real
-    // multi-step/pause-surface workflow is the remaining real-path work (vela-bridge.ts HONESTY note).
-    const { module } = makeVelaDouble({ blockOn: ["target_schema"] });
+  it("a HITL (awaitHuman) Vela block propagates UP through ELIOs stack as a node-suspended event (Inv. 11)", async () => {
+    // The block->node-suspended propagation seam: the agent step opts into the gate (awaitHuman), the gate's
+    // depends_on parks the run, and the block surfaces as a node-suspended event through the whole ELIO stack.
+    const { module } = makeVelaDouble();
     const rt = createVelaRuntime({
       models: { mock: new MockModel() },
       defaultModel: "mock",
@@ -97,7 +96,7 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     rt.registry.register(passGate as unknown as NodeDefinition);
 
     const events: RunEvent[] = [];
-    for await (const ev of rt.run(velaAgentPack(), { payload: {}, budget: 100, maxDepth: 5 })) {
+    for await (const ev of rt.run(velaAgentPack(true), { payload: {}, budget: 100, maxDepth: 5 })) {
       events.push(ev);
     }
 
@@ -106,7 +105,7 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
         e.type === "node-suspended" && e.correlation.step === "delegate",
     );
     expect(suspended).toBeDefined();
-    expect(suspended!.elicitation.what).toMatch(/blockiert|target_schema/i);
+    expect(suspended!.elicitation.what).toMatch(/blockiert|elioHumanAnswer/i);
   });
 
   it("suspend -> resume roundtrip through the runtime: a blocked Vela turn resumes to completion (Inv. 11/12)", async () => {
@@ -114,7 +113,7 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     // answer) re-drives the SAME step. The runner sets ctx.resume ONLY on that step; the agent node forwards
     // it as contract.resume; the SAME (persistent-store-backed) Vela engine re-finds its paused run by the
     // resume-stable identity key, unblocks it, routes the model call through ctx.model, and RESOLVES.
-    const { module } = makeVelaDouble({ blockOn: ["needs_input"] });
+    const { module } = makeVelaDouble();
     const rt = createVelaRuntime({
       models: { mock: new MockModel({ transform: (str) => `drafted: ${str}` }) },
       defaultModel: "mock",
@@ -123,9 +122,9 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     });
     rt.registry.register(passGate as unknown as NodeDefinition);
 
-    // Turn 1: run until it suspends on the Vela block.
+    // Turn 1: run until it suspends on the Vela HITL gate.
     const first: RunEvent[] = [];
-    for await (const ev of rt.run(velaAgentPack(), { payload: {}, budget: 100, maxDepth: 5 })) {
+    for await (const ev of rt.run(velaAgentPack(true), { payload: {}, budget: 100, maxDepth: 5 })) {
       first.push(ev);
     }
     const suspended = first.find(
@@ -146,8 +145,9 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
     const done = resumed.find((e) => e.type === "run-completed");
     expect(done).toBeDefined();
     if (done?.type === "run-completed") expect(done.gate).toBe("passed");
-    // The resumed delegate's reply was produced by routing through ctx.model (Inv. 18): the mock transform
-    // ran on the agent prompt. Read it off the resumed delegate's tape frame.
+    // The resumed delegate's reply was produced by routing through ctx.model (Inv. 18) — and the HUMAN
+    // ANSWER was folded into the model input (last user turn), so the reply reflects it. Read it off the
+    // resumed delegate's tape frame.
     const runId = first.find((e) => e.type === "run-started")!.correlation.run;
     const delegateFrame = rt.store
       .getTape(runId)
@@ -155,9 +155,10 @@ describe("registerVelaAdapter / createVelaRuntime — agent node routes to the V
       .at(-1);
     expect(delegateFrame?.result.status).toBe("resolved");
     if (delegateFrame?.result.status === "resolved") {
-      // raw node output is { output: <engine reply> }; the Vela engine's reply is { text }.
+      // raw node output is { output: <engine reply> }; the Vela engine's reply is { text }. The mock
+      // transform ran on the LAST message = the human answer -> proves resume fed the answer to the model.
       const out = (delegateFrame.result.output as { output?: { text?: string } }).output;
-      expect(out?.text).toBe("drafted: draft the note");
+      expect(out?.text).toBe("drafted: yes, proceed");
     }
   });
 

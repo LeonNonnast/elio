@@ -72,13 +72,14 @@ export interface VelaStartOptions {
 }
 
 /**
- * Options the bridge passes to advance() (subset of vela-sdk's AdvanceOptions). On a RESUME turn the
- * bridge supplies `resumeAnswer` — the human's answer to the elicitation that paused the run — so the
- * engine can unblock the paused step (real Vela accepts `options.stepOutput`/`notes`; we mirror the
- * narrow slice the bridge needs). Absent on a first turn.
+ * Subset of vela-sdk's AdvanceOptions. The bridge does NOT resume via these — real Vela unblocks a
+ * depends_on gate by having the field PRESENT in stateData, not by an advance option (there is no
+ * per-key inject option). The bridge instead writes the answer + hops currentStep via store.updateStep,
+ * then advances with no options. Kept for structural fidelity to the real advance(run, def, options?).
  */
 export interface VelaAdvanceOptions {
-  resumeAnswer?: unknown;
+  stepOutput?: string | null;
+  notes?: string | null;
 }
 
 /** Mirrors vela-sdk IWorkflowEngine (the two methods the bridge drives). */
@@ -94,15 +95,28 @@ export interface VelaWorkflowEngine {
   ): Promise<VelaAdvanceResult>;
 }
 
-/** Mirrors vela-sdk WorkflowStore (only findByIdentity is referenced directly). */
+/** Mirrors the slice of vela-sdk WorkflowStore the bridge drives (findByIdentity + getById + updateStep). */
 export interface VelaWorkflowStore {
   findByIdentity(
     workflowId: string,
     identityParams: Record<string, string>,
   ): Promise<VelaRunState | null>;
+  /** Fetch a run by id (used on resume to reload after a state injection). */
+  getById(runId: string): Promise<VelaRunState | null>;
+  /**
+   * Shallow-merge `stateData` and/or move `currentStep` (stepId) / set `status`. On resume the bridge uses
+   * this to (a) write the human answer into the dependency field and (b) HOP currentStep onto the gated
+   * delegate step so the next advance runs it (instead of re-running the already-run step). `stepId=null`
+   * keeps the current step. Mirrors vela-sdk WorkflowStore.updateStep(runId, stepId, { stateData, status }).
+   */
+  updateStep(
+    runId: string,
+    stepId: string | null,
+    opts: { stateData?: Record<string, unknown>; status?: VelaRunStatus },
+  ): Promise<void>;
 }
 
-/** Mirrors a vela-sdk workflow definition (the single-delegate-step shape the bridge builds). */
+/** Mirrors a vela-sdk workflow definition (the freeform-gate -> delegate HITL shape the bridge builds). */
 export interface VelaWorkflowDefinition {
   id: string;
   version: string;
@@ -120,26 +134,35 @@ export interface VelaWorkflowDefinition {
   lifecycle: null;
   tools: never[];
   resources: never[];
-  steps: VelaDelegateStep[];
+  steps: VelaStep[];
 }
 
-/** A single Vela `delegate` step (the only step type the bridge emits). */
-export interface VelaDelegateStep {
-  type: "delegate";
+/** A capture entry on a step (delegate output -> run.stateData[key], per the capture pipeline). */
+export interface VelaCapture {
+  key: string;
+  type: string;
+  required: boolean;
+  source: string;
+  options: never[];
+  suggest: boolean;
+  elicit: string;
+}
+
+/**
+ * A Vela step (the narrow slice the bridge emits): a `delegate` step (routes the model call) or a
+ * `freeform` gate step. `depends_on` on the NEXT step is the engine's real pause primitive — an
+ * unsatisfied field parks the run (blocked:true) until the human answer is written into stateData.
+ */
+export interface VelaStep {
+  type: string;
   id: string;
-  delegate: string;
-  task: unknown;
-  capture: {
-    key: string;
-    type: string;
-    required: boolean;
-    source: string;
-    options: never[];
-    suggest: boolean;
-    elicit: string;
-  }[];
-  depends_on: never[];
-  next: null;
+  /** Present on a `delegate` step; absent on a `freeform` gate step. */
+  delegate?: string;
+  task?: unknown;
+  capture: VelaCapture[];
+  /** `{ step, fields }` — fields that must be present in run.stateData before advancing INTO this step. */
+  depends_on: { step: string; fields: string[] }[];
+  next: string | null;
   tools: never[];
   instructions: null;
   title?: string;

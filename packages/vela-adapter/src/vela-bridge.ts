@@ -13,23 +13,30 @@
 //      captures `text` -> updateStep merges stateData.text, which we read back below.
 //   4. Read the captured reply out of run.stateData and return it as an ELIO NodeResult.
 //
-// SUSPEND / RESUME (identity↔correlation, Inv. 11/12 — §v0.2, IMPLEMENTED):
-//   A turn that PAUSES (Vela's advance returns blocked / leaves the run PAUSED) is surfaced as `blocked`,
-//   which the engine maps to an ELIO Suspended (Inv. 11). The paused run is kept in a store that OUTLIVES
-//   the turn (the engine owns one persistent store, not one-per-turn). On the RESUME turn the agent node
-//   re-delegates with contract.resume set (the human's answer); startOrResume re-finds the SAME run by its
-//   RESUME-STABLE identity key (identityKey() = run::branch::step, checkpoint dropped so it matches across
-//   the suspend/resume boundary), and advance() is driven with `{ resumeAnswer }` to unblock the step,
-//   route the model call through ctx.model, and RESOLVE. This closes the two v0.1 gaps (no cross-turn
-//   store, unstable identity key). The core seam that carries the answer across the boundary is real
-//   (SessionContract.resume <- ctx.resume, set by the runner only at the re-driven step).
+// TWO WORKFLOW SHAPES (both REAL against DefaultWorkflowEngine — verified by the guarded real test):
+//   • HAPPY PATH (default): a SINGLE delegate step. advance() runs the model and COMPLETEs in one turn.
+//     This is the normal agent turn — it never suspends.
+//   • HITL (opt-in via input.awaitHuman, or any resume turn): a freeform GATE step, then the model DELEGATE
+//     whose `depends_on` names HUMAN_ANSWER_FIELD. Advancing off the gate INTO the delegate BLOCKS
+//     (advance -> blocked:true, run stays ACTIVE, parked on the gate) until the human answer is written
+//     into stateData. No model runs on this initial turn -> no cost charged for a turn that suspends.
 //
-// HONESTY (impl-decisions §7): the suspend/resume + identity-resume roundtrip is verified against the
-// deterministic double (a faithful mirror of Vela's findByIdentity + pause). The REAL DefaultWorkflowEngine
-// returns blocked:true only for a NEXT step with an unsatisfied depends_on; the single-delegate-step shape
-// does not pause on the real engine, so on real Vela this still degrades to a single RESOLVED turn (a real
-// multi-step/pause-surface workflow is the remaining real-path work). Same best-effort posture as before —
-// now with the resume machinery genuinely built + tested, not merely aspirational.
+// SUSPEND / RESUME (identity↔correlation, Inv. 11/12 — §v0.2, IMPLEMENTED & REAL):
+//   The blocked turn is surfaced as `blocked` -> the engine maps it to an ELIO Suspended (Inv. 11). The
+//   paused run lives in a store that OUTLIVES the turn (the engine owns ONE persistent store). On the
+//   RESUME turn the agent node re-delegates with contract.resume set (the human answer); startOrResume
+//   re-finds the SAME run by its RESUME-STABLE identity key (identityKey() = run::branch::step, checkpoint
+//   dropped so it matches across the suspend/resume boundary). The bridge then WRITES the answer into the
+//   depends_on field and HOPS currentStep onto the delegate via store.updateStep (the real engine has no
+//   per-key advance option — this IS its resume protocol), so advance() runs the model exactly once and
+//   RESOLVEs. The core seam that carries the answer across the ELIO boundary is real (SessionContract.resume
+//   <- ctx.resume, set by the runner only at the re-driven step).
+//
+// HONESTY (impl-decisions §7): the whole roundtrip was proven against the REAL built vela-sdk dist (the
+// guarded real test, ELIO_RUN_REAL_VELA=1) AND is exercised in every run against a deterministic double
+// that faithfully mirrors findByIdentity + the depends_on pause primitive + updateStep. vela-sdk remains a
+// non-dependency (Inv. 2): the real path activates only when the package is installed/resolvable, else the
+// engine falls back in-process.
 //
 // The delegate registry is a MODULE-GLOBAL in vela-sdk (registerDelegate throws on duplicate). The
 // bridge registers ONE stable handler name idempotently (guarded by resolveDelegate) and threads the
@@ -60,6 +67,18 @@ export const CORRELATION_PARAM = "elioCorrelation";
 export const PROMPT_PARAM = "elioPrompt";
 
 /**
+ * The HITL workflow shape (proven against the real DefaultWorkflowEngine): a freeform GATE step first,
+ * then the model DELEGATE step whose `depends_on` names HUMAN_ANSWER_FIELD. Advancing off the gate INTO
+ * the delegate blocks (blocked:true) until the human answer is written into stateData — so the model does
+ * NOT run on the initial turn (budget-correct: no cost charged for a turn that suspends). On resume the
+ * bridge writes the answer + hops currentStep onto the delegate, so advance runs the model exactly once.
+ */
+export const GATE_STEP = "elio-gate";
+export const MODEL_STEP = "elio-call-model";
+/** The depends_on field the human answer satisfies (the real engine's pause primitive). */
+export const HUMAN_ANSWER_FIELD = "elioHumanAnswer";
+
+/**
  * Resume-stable identity key = run::branch::step (NO checkpoint). corrKey() would append the checkpoint,
  * which changes on every suspend, so it could never match across a suspend/resume. Dropping it makes the
  * SAME agent step re-find its own paused Vela run on resume (identity↔correlation, Inv. 12).
@@ -76,6 +95,8 @@ interface DelegateCallContext {
   costSink: { cost: Cost };
   /** Captures the model's confidence (last completion). */
   confidenceSink: { confidence: number };
+  /** On a resume turn: the human answer, folded into the model input as a trailing user message. */
+  resumeAnswer?: unknown;
 }
 
 /** The (template-resolved) agent config the agent node passes as contract.input. */
@@ -85,6 +106,12 @@ export interface BridgeAgentInput {
   system?: string;
   model?: string;
   maxTokens?: number;
+  /**
+   * Opt-in human-in-the-loop (§v0.2): when true, the turn PAUSES for a human before the model runs (the
+   * gated freeform->delegate shape). Absent/false = the normal happy path (single delegate, resolves in
+   * one turn, model runs immediately). A resume turn is always treated as gated (it continues a paused run).
+   */
+  awaitHuman?: boolean;
 }
 
 /** Provider-neutral completion request (same shape ctx.model.complete accepts). */
@@ -147,7 +174,12 @@ async function elioModelDelegate(
         "Modell-Pfad nicht denken (Inv. 14/18).",
     );
   }
-  const req: CompletionRequestShape = { messages: buildMessages(call.input) };
+  const messages = buildMessages(call.input);
+  // On resume, fold the human answer in as a trailing user turn so the model call reflects it (Inv. 11/12).
+  if (call.resumeAnswer !== undefined) {
+    messages.push({ role: "user", content: String(call.resumeAnswer) });
+  }
+  const req: CompletionRequestShape = { messages };
   if (typeof call.input.system === "string") req.system = call.input.system;
   if (typeof call.input.model === "string") req.model = call.input.model;
   if (typeof call.input.maxTokens === "number") req.maxTokens = call.input.maxTokens;
@@ -167,51 +199,77 @@ function ensureDelegateRegistered(vela: VelaModule): void {
   }
 }
 
-/** Build the single-delegate-step workflow definition for one ELIO session turn. */
-function buildWorkflowDefinition(): VelaWorkflowDefinition {
+const IDENTITY_PARAMS: VelaWorkflowDefinition["params"] = [
+  {
+    name: CORRELATION_PARAM,
+    required: false,
+    // identity:true tags the run so startOrResume can re-find it via findByIdentity on the resume turn
+    // (identity↔correlation, Inv. 12). The value is the resume-stable identityKey (see header).
+    identity: true,
+    application: false,
+    resolve: false,
+  },
+  { name: PROMPT_PARAM, required: false, identity: false, application: false, resolve: false },
+];
+
+const TEXT_CAPTURE = [
+  { key: "text", type: "string", required: false, source: "output", options: [] as never[], suggest: false, elicit: "never" },
+];
+
+/** The model DELEGATE step (routes the call through ctx.model via the registered elio-model delegate). */
+function modelStep(dependsOn: { step: string; fields: string[] }[], next: string | null): VelaWorkflowDefinition["steps"][number] {
+  return {
+    type: "delegate",
+    id: MODEL_STEP,
+    delegate: ELIO_MODEL_DELEGATE,
+    task: `{{params.${PROMPT_PARAM}}}`,
+    capture: TEXT_CAPTURE,
+    depends_on: dependsOn,
+    next,
+    tools: [],
+    instructions: null,
+  };
+}
+
+/**
+ * HAPPY-PATH def (default): a single delegate step. advance() runs the model and COMPLETEs in one turn —
+ * the run is never left active, so it is never a resume target. This is the normal, real-Vela v0.1 surface.
+ */
+function buildResolveDefinition(): VelaWorkflowDefinition {
   return {
     id: "elio.inner-session",
     version: "1.0.0",
     name: "ELIO inner session (bridged to Vela)",
     description: "",
-    params: [
-      {
-        name: CORRELATION_PARAM,
-        required: false,
-        // identity:true tags the run so startOrResume can re-find it via findByIdentity on the resume turn
-        // (identity↔correlation, Inv. 12). The value is the resume-stable identityKey (see header).
-        identity: true,
-        application: false,
-        resolve: false,
-      },
-      { name: PROMPT_PARAM, required: false, identity: false, application: false, resolve: false },
-    ],
+    params: IDENTITY_PARAMS,
+    context: null,
+    lifecycle: null,
+    tools: [],
+    resources: [],
+    steps: [modelStep([], null)],
+  };
+}
+
+/**
+ * HITL def (opt-in / resume): a freeform GATE first, then the model DELEGATE whose depends_on names
+ * HUMAN_ANSWER_FIELD. Advancing off the gate INTO the delegate BLOCKS until the human answer is in
+ * stateData — so no model runs on the initial turn (budget-correct). On resume the bridge writes the
+ * answer + hops currentStep onto the delegate, so advance runs the model exactly once.
+ */
+function buildHitlDefinition(): VelaWorkflowDefinition {
+  return {
+    id: "elio.inner-session",
+    version: "1.0.0",
+    name: "ELIO inner session (bridged to Vela, HITL)",
+    description: "",
+    params: IDENTITY_PARAMS,
     context: null,
     lifecycle: null,
     tools: [],
     resources: [],
     steps: [
-      {
-        type: "delegate",
-        id: "call-model",
-        delegate: ELIO_MODEL_DELEGATE,
-        task: `{{params.${PROMPT_PARAM}}}`,
-        capture: [
-          {
-            key: "text",
-            type: "string",
-            required: false,
-            source: "output",
-            options: [],
-            suggest: false,
-            elicit: "if_missing",
-          },
-        ],
-        depends_on: [],
-        next: null,
-        tools: [],
-        instructions: null,
-      },
+      { type: "freeform", id: GATE_STEP, capture: [], depends_on: [], next: MODEL_STEP, tools: [], instructions: null },
+      modelStep([{ step: GATE_STEP, fields: [HUMAN_ANSWER_FIELD] }], null),
     ],
   };
 }
@@ -265,10 +323,15 @@ export async function runVelaTurn(
         : "";
 
   const engine = new vela.DefaultWorkflowEngine(store);
-  const def = buildWorkflowDefinition();
+  // A resume turn continues a paused HITL run; an opt-in `awaitHuman` turn starts one; everything else is
+  // the happy path (single delegate, resolves immediately). Both defs share the workflow id, but a
+  // happy-path run COMPLETEs (never a resume target), so there is no identity collision.
+  const isResume = contract.resume !== undefined;
+  const gated = isResume || input.awaitHuman === true;
+  const def = gated ? buildHitlDefinition() : buildResolveDefinition();
 
   const identity = identityKey(ctx.correlation);
-  // startOrResume re-finds a PAUSED run with this identity (resume), else creates a fresh one (first turn).
+  // startOrResume re-finds the run with this identity (resume: it is ACTIVE+blocked), else creates it fresh.
   const [run] = await engine.startOrResume(def, {
     params: { [CORRELATION_PARAM]: identity, [PROMPT_PARAM]: promptText },
   });
@@ -276,31 +339,63 @@ export async function runVelaTurn(
   const costSink = { cost: {} as Cost };
   const confidenceSink = { confidence: 0 };
 
-  // On a resume turn, feed the human answer into advance() so the paused step unblocks (Inv. 11/12).
-  const advanceOpts =
-    contract.resume !== undefined ? { resumeAnswer: contract.resume.answer } : undefined;
+  // ── RESUME turn (gated) ────────────────────────────────────────────────────────────────────────
+  // Write the human answer into the depends_on field AND hop currentStep onto the delegate, so the next
+  // advance RUNS the model (it did not run on the initial, blocked turn). The model cost is thus charged on
+  // the RESOLVING turn (budget-correct). This is the real engine's resume protocol (no per-key advance opt).
+  if (isResume) {
+    await store.updateStep(run.id, MODEL_STEP, {
+      stateData: { [HUMAN_ANSWER_FIELD]: String(contract.resume?.answer) },
+    });
+    const hopped = await store.getById(run.id);
+    if (hopped === null) {
+      throw new Error(`VelaBridge: resume — run ${run.id} vanished from the store.`);
+    }
+    const resumed: VelaAdvanceResult = await delegateStore.run(
+      { ctx, input, costSink, confidenceSink, resumeAnswer: contract.resume?.answer },
+      () => engine.advance(hopped, def),
+    );
+    return {
+      text: typeof resumed.run.stateData["text"] === "string" ? (resumed.run.stateData["text"] as string) : "",
+      cost: costSink.cost,
+      confidence: confidenceSink.confidence,
+    };
+  }
 
+  // ── Initial GATED turn (awaitHuman) ─────────────────────────────────────────────────────────────
+  // Advance the freeform gate; the move INTO the delegate blocks on the missing human answer. No delegate
+  // runs -> no model call, no cost. The run stays in `store` (ACTIVE, parked) as the resume target.
+  if (gated) {
+    const advanced: VelaAdvanceResult = await delegateStore.run(
+      { ctx, input, costSink, confidenceSink },
+      () => engine.advance(run, def),
+    );
+    if (advanced.blocked === true) {
+      return {
+        text: "",
+        cost: costSink.cost,
+        confidence: confidenceSink.confidence,
+        blocked: { by: advanced.blockedBy ?? [HUMAN_ANSWER_FIELD] },
+      };
+    }
+    // Did not block (unexpected for this shape) -> surface whatever reply was produced.
+    return {
+      text: typeof advanced.run.stateData["text"] === "string" ? (advanced.run.stateData["text"] as string) : "",
+      cost: costSink.cost,
+      confidence: confidenceSink.confidence,
+    };
+  }
+
+  // ── HAPPY path (single delegate, resolves in one advance) ────────────────────────────────────────
   const advanced: VelaAdvanceResult = await delegateStore.run(
     { ctx, input, costSink, confidenceSink },
-    () => engine.advance(run, def, advanceOpts),
+    () => engine.advance(run, def),
   );
-
-  const text =
-    typeof advanced.run.stateData["text"] === "string"
-      ? (advanced.run.stateData["text"] as string)
-      : "";
-
-  const result: BridgeTurnResult = {
-    text,
+  return {
+    text: typeof advanced.run.stateData["text"] === "string" ? (advanced.run.stateData["text"] as string) : "",
     cost: costSink.cost,
     confidence: confidenceSink.confidence,
   };
-  // Vela paused/blocked the run (unsatisfied depends_on / a pause surface) -> surface it so the engine
-  // maps it to an ELIO Suspended; the run stays PAUSED in `store` as the resume target for the next turn.
-  if (advanced.blocked === true) {
-    result.blocked = { by: advanced.blockedBy ?? [] };
-  }
-  return result;
 }
 
 /** Build the Elicitation an ELIO agent node raises when Vela blocks/pauses the run (Inv. 11). */

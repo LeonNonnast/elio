@@ -1,24 +1,19 @@
 // ───────────────────────────── Deterministic Vela double (TEST ONLY, no network, no real server) ─────────────────────────────
 // An in-memory mirror of the SLICE of `vela-sdk` the bridge drives, matched against the real source
-// (engine/workflow-engine.ts, storage/memory-store.ts). It lets the tests exercise the REAL bridge code
-// path (runVelaTurn, the registerDelegate model-routing seam, the RESOLVED capture pipeline) WITHOUT
-// installing vela-sdk or standing up an MCP server.
+// (engine/workflow-engine.ts, storage/memory-store.ts) AND cross-checked by running the exact bridge
+// workflow shape against the real built dist (see the guarded real test). It lets the tests exercise the
+// REAL bridge code path (runVelaTurn, the registerDelegate model-routing seam, the RESOLVED capture
+// pipeline, and the genuine suspend/resume protocol) WITHOUT installing vela-sdk or standing up a server.
 //
-// Faithfulness to the real contract (the v0.1 RESOLVED happy path is exact):
-//   - module-global delegate registry; registerDelegate throws on duplicate (matches vela-sdk).
-//   - startOrResume builds identity params from params flagged `identity`, then findByIdentity re-finds
-//     an ACTIVE/PAUSED run (matches vela-sdk: a COMPLETED run is not a resume target).
-//   - advance runs a `delegate` step's handler, resolves `{{params.x}}` templates, captures the
-//     handler's `{text}` into run.stateData.text, and COMPLETES the (single-step) run.
-//
-// PAUSE / RESUME model (faithful to Vela's semantics, exercises the real bridge suspend/resume path):
-// the `blockOn` directive makes the FIRST advance() return { blocked, blockedBy } and leave the run
-// PAUSED (mirrors an unsatisfied depends_on). A later advance() that carries `options.resumeAnswer` (the
-// bridge supplies it on the resume turn) does NOT re-block — it runs the delegate and COMPLETEs, mirroring
-// real Vela's advance(run, def, {stepOutput}) unblocking a paused step. Combined with findByIdentity
-// (re-finds ACTIVE/PAUSED runs) this lets the tests drive the genuine identity↔correlation resume roundtrip.
-// The real single-delegate-step shape does not pause on the real engine (its depends_on is empty); a real
-// multi-step/pause-surface workflow is the remaining real-path work (see vela-bridge.ts HONESTY note).
+// Faithfulness to the real engine (verified against the dist):
+//   - module-global delegate registry; registerDelegate throws on duplicate.
+//   - startOrResume builds identity params from params flagged `identity`, then findByIdentity re-finds a
+//     run whose status is ACTIVE or PAUSED (a COMPLETED run is not a resume target).
+//   - advance runs a `delegate` step's handler in-place, captures its output into run.stateData, then
+//     evaluates the NEXT step's `depends_on`: any field missing from stateData -> blocked:true (status
+//     stays ACTIVE, currentStep unchanged) — the real engine's ONLY generic "wait for a human" primitive.
+//   - resume = write the missing field into stateData + hop currentStep onto the gated step (store.updateStep),
+//     then advance runs that step. Mirrors workflow-engine.ts advance()/validateDependsOn + memory-store.ts.
 
 import type {
   VelaAdvanceOptions,
@@ -27,7 +22,9 @@ import type {
   VelaDelegateHandler,
   VelaModule,
   VelaRunState,
+  VelaRunStatus,
   VelaStartOptions,
+  VelaStep,
   VelaWorkflowDefinition,
   VelaWorkflowEngine,
   VelaWorkflowStore,
@@ -63,11 +60,28 @@ export class FakeInMemoryStore implements VelaWorkflowStore {
   ): Promise<VelaRunState | null> {
     for (const run of this.runs.values()) {
       if (run.workflowId !== workflowId) continue;
+      // Real store: only ACTIVE/PAUSED runs are resume targets (a depends_on block leaves status ACTIVE).
       if (run.status !== "active" && run.status !== "paused") continue;
       const allMatch = Object.entries(identityParams).every(([k, v]) => run.params[k] === v);
       if (allMatch) return run;
     }
     return null;
+  }
+
+  async getById(runId: string): Promise<VelaRunState | null> {
+    return this.runs.get(runId) ?? null;
+  }
+
+  async updateStep(
+    runId: string,
+    stepId: string | null,
+    opts: { stateData?: Record<string, unknown>; status?: VelaRunStatus },
+  ): Promise<void> {
+    const run = this.runs.get(runId);
+    if (run === undefined) return;
+    if (stepId !== null) run.currentStep = stepId; // hop currentStep (null keeps it)
+    if (opts.stateData !== undefined) Object.assign(run.stateData, opts.stateData); // shallow-merge
+    if (opts.status !== undefined) run.status = opts.status;
   }
 }
 
@@ -87,16 +101,21 @@ function resolveTemplate(text: string, params: Record<string, unknown>): string 
   });
 }
 
-export interface FakeEngineOptions {
-  /** If set, advance returns blocked with these missing fields (mirrors unsatisfied depends_on). */
-  blockOn?: string[];
+/** Missing depends_on fields for advancing INTO `step` given the current stateData (mirrors validateDependsOn). */
+function missingDeps(step: VelaStep, stateData: Record<string, unknown>): string[] {
+  const missing: string[] = [];
+  for (const dep of step.depends_on) {
+    for (const f of dep.fields) {
+      if (!(f in stateData)) missing.push(f);
+    }
+  }
+  return missing;
 }
 
 export class FakeWorkflowEngine implements VelaWorkflowEngine {
   constructor(
     private readonly store: FakeInMemoryStore,
     private readonly registry: FakeDelegateRegistry,
-    private readonly opts: FakeEngineOptions = {},
   ) {}
 
   async startOrResume(
@@ -128,49 +147,60 @@ export class FakeWorkflowEngine implements VelaWorkflowEngine {
   async advance(
     run: VelaRunState,
     def: VelaWorkflowDefinition,
-    options?: VelaAdvanceOptions,
+    _options?: VelaAdvanceOptions,
   ): Promise<VelaAdvanceResult> {
+    if (run.status !== "active" && run.status !== "paused") return { run, completed: true };
     const step = def.steps.find((s) => s.id === run.currentStep);
     if (!step) {
       run.status = "completed";
       run.currentStep = null;
       return { run, completed: true };
     }
-    // Blocked path: mirror an unsatisfied depends_on (run pauses, no delegate runs). A RESUME advance
-    // (options.resumeAnswer present) carries the human's answer that satisfies the dependency, so it does
-    // NOT re-block — it falls through and runs the delegate to COMPLETE the paused step (identity↔correlation
-    // resume, Inv. 11/12). This mirrors real Vela's advance(run, def, {stepOutput}) unblocking a paused step.
-    if (
-      this.opts.blockOn !== undefined &&
-      this.opts.blockOn.length > 0 &&
-      options?.resumeAnswer === undefined
-    ) {
-      run.status = "paused";
-      return { run, completed: false, blocked: true, blockedBy: this.opts.blockOn };
+    // Run a `delegate` step's handler in-place (a `freeform` gate step runs nothing).
+    if (step.type === "delegate" && typeof step.delegate === "string") {
+      const handler = this.registry.resolve(step.delegate);
+      if (!handler) throw new Error(`No handler registered for delegate '${step.delegate}'`);
+      const ctx: VelaDelegateContext = {
+        resolveVars: (v) => (typeof v === "string" ? resolveTemplate(v, run.params) : v),
+        setCapture: (key, value) => {
+          run.stateData[key] = value;
+        },
+        log: () => {},
+      };
+      const result = await handler({ id: step.id, delegate: step.delegate, task: step.task }, ctx);
+      // Capture pipeline: copy each output-capture key from the handler's returned object into stateData.
+      if (result !== null && typeof result === "object") {
+        const obj = result as Record<string, unknown>;
+        for (const cap of step.capture) {
+          if (cap.source === "output" && cap.key in obj) run.stateData[cap.key] = obj[cap.key];
+        }
+      }
     }
-    const handler = this.registry.resolve(step.delegate);
-    if (!handler) throw new Error(`No handler registered for delegate '${step.delegate}'`);
-    const ctx: VelaDelegateContext = {
-      resolveVars: (v) =>
-        typeof v === "string" ? resolveTemplate(v, run.params) : v,
-      setCapture: (key, value) => {
-        run.stateData[key] = value;
-      },
-      log: () => {},
-    };
-    const result = await handler({ id: step.id, delegate: step.delegate, task: step.task }, ctx);
-    // Capture {text} into stateData (mirrors vela-sdk's output capture pipeline).
-    if (result && typeof result === "object" && "text" in (result as Record<string, unknown>)) {
-      run.stateData["text"] = (result as { text: unknown }).text;
+    // Determine the next step; no next -> complete.
+    const nextId = step.next;
+    if (nextId === null || nextId === undefined) {
+      run.status = "completed";
+      run.currentStep = null;
+      return { run, completed: true };
     }
-    run.status = "completed";
-    run.currentStep = null;
-    return { run, completed: true };
+    const nextStep = def.steps.find((s) => s.id === nextId);
+    if (nextStep === undefined) {
+      run.status = "completed";
+      run.currentStep = null;
+      return { run, completed: true };
+    }
+    // depends_on gate on the NEXT step: any field missing from stateData -> block (stay ACTIVE, do not move).
+    const missing = missingDeps(nextStep, run.stateData);
+    if (missing.length > 0) {
+      return { run, completed: false, blocked: true, blockedBy: missing };
+    }
+    run.currentStep = nextId;
+    return { run, completed: false };
   }
 }
 
 /** Build a VelaModule double. A shared registry mirrors vela-sdk's module-global delegate registry. */
-export function makeVelaDouble(opts: FakeEngineOptions = {}): {
+export function makeVelaDouble(): {
   module: VelaModule;
   registry: FakeDelegateRegistry;
   stores: FakeInMemoryStore[];
@@ -181,7 +211,7 @@ export function makeVelaDouble(opts: FakeEngineOptions = {}): {
     DefaultWorkflowEngine: class implements VelaWorkflowEngine {
       private readonly inner: FakeWorkflowEngine;
       constructor(store: VelaWorkflowStore) {
-        this.inner = new FakeWorkflowEngine(store as FakeInMemoryStore, registry, opts);
+        this.inner = new FakeWorkflowEngine(store as FakeInMemoryStore, registry);
       }
       startOrResume(def: VelaWorkflowDefinition, options?: VelaStartOptions) {
         return this.inner.startOrResume(def, options);

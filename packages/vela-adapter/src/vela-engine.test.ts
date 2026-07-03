@@ -65,49 +65,51 @@ describe("VelaAgentEngine — identity + transparency (Inv. 12/17/18)", () => {
 
   it("suspend/resume: a paused turn re-finds its run by ctx.correlation identity and completes with the answer (Inv. 11/12)", async () => {
     // The genuine identity↔correlation resume roundtrip THROUGH the engine (no manual startOrResume): the
-    // engine owns ONE persistent store, so a paused run survives until the resume turn re-finds it by its
-    // resume-stable identity key (run::branch::step). The double's blockOn models the pause; supplying
-    // contract.resume on the second turn unblocks it (mirrors real Vela advance(run,def,{stepOutput})).
-    const { module, stores } = makeVelaDouble({ blockOn: ["needs_input"] });
+    // engine owns ONE persistent store, so the parked (blocked, still-ACTIVE) run survives until the resume
+    // turn re-finds it by its resume-stable identity key (run::branch::step). `awaitHuman:true` opts the turn
+    // into the HITL gate shape; contract.resume on the second turn writes the answer + advances to RESOLVE.
+    const { module, stores } = makeVelaDouble();
     const s = scriptedModel(["resumed reply"]);
     const eng = new VelaAgentEngine({ velaLoader: () => Promise.resolve(module) });
     const ctx = ctxWith({ model: s.model });
 
-    // Turn 1: blocks -> Suspended (Inv. 11). No model call yet; the run is PAUSED in the engine's store.
-    const sr1 = await eng.run({ input: { prompt: "go" }, budget: 100, depth: 1, maxDepth: 5 }, ctx);
+    // Turn 1: gate blocks BEFORE the model -> Suspended (Inv. 11). No model call yet; run parked in the store.
+    const sr1 = await eng.run(
+      { input: { prompt: "go", awaitHuman: true }, budget: 100, depth: 1, maxDepth: 5 },
+      ctx,
+    );
     expect("elicitation" in sr1).toBe(true);
-    expect(s.calls()).toBe(0);
+    expect(s.calls()).toBe(0); // gate-first: no model on the blocking turn (budget-correct)
     const store = stores[0]!;
-    expect([...store.runs.values()].filter((r) => r.status === "paused").length).toBe(1);
+    // The run is parked (blocked) but still ACTIVE (real depends_on block does not set PAUSED) and re-findable.
+    expect([...store.runs.values()].length).toBe(1);
+    expect([...store.runs.values()][0]!.status).not.toBe("completed");
 
-    // Turn 2 (resume): SAME ctx.correlation + contract.resume -> re-finds the paused run, unblocks, routes
-    // the model call through ctx.model (Inv. 18), and RESOLVES.
+    // Turn 2 (resume): SAME ctx.correlation + contract.resume -> re-finds the run, injects the answer, runs
+    // the model through ctx.model (Inv. 18), and RESOLVES.
     const sr2 = await eng.run(
-      { input: { prompt: "go" }, budget: 100, depth: 1, maxDepth: 5, resume: { answer: "proceed" } },
+      { input: { prompt: "go", awaitHuman: true }, budget: 100, depth: 1, maxDepth: 5, resume: { answer: "proceed" } },
       ctx,
     );
     if (!("result" in sr2) || sr2.result.status !== "resolved") throw new Error("expected resolved");
     expect((sr2.result.output as { text: string }).text).toBe("resumed reply");
     expect(s.calls()).toBe(1); // the model call happened ONLY on the resume turn
-    // The paused run was resumed to completion, not left dangling nor duplicated.
-    expect([...store.runs.values()].filter((r) => r.status === "paused").length).toBe(0);
     expect([...store.runs.values()].length).toBe(1); // re-found the SAME run (no fresh create)
+    expect([...store.runs.values()][0]!.status).toBe("completed"); // resumed to completion
   });
 
-  it("propagates a Vela block/pause UP as an ELIO Suspended/elicitation (Inv. 11)", async () => {
-    // The block->Suspended wiring, driven by the double's blockOn (which models an unsatisfied depends_on /
-    // pause surface). The single-delegate-step shape does not pause on the REAL engine (empty depends_on);
-    // a real multi-step/pause-surface workflow is the remaining real-path work (vela-bridge.ts HONESTY note).
-    const { module } = makeVelaDouble({ blockOn: ["target_schema"] });
+  it("propagates a Vela block UP as an ELIO Suspended/elicitation on a HITL (awaitHuman) turn (Inv. 11)", async () => {
+    // The block->Suspended wiring: the freeform gate's depends_on parks the run until a human answers.
+    const { module } = makeVelaDouble();
     const s = scriptedModel(["unused"]);
     const eng = new VelaAgentEngine({ velaLoader: () => Promise.resolve(module) });
     const sr = await eng.run(
-      { input: { prompt: "go" }, budget: 100, depth: 1, maxDepth: 5 },
+      { input: { prompt: "go", awaitHuman: true }, budget: 100, depth: 1, maxDepth: 5 },
       ctxWith({ model: s.model }),
     );
     expect("elicitation" in sr).toBe(true);
     if (!("elicitation" in sr)) throw new Error("expected elicitation");
-    expect(sr.elicitation.what).toMatch(/blockiert|target_schema/i);
+    expect(sr.elicitation.what).toMatch(/blockiert|elioHumanAnswer/i);
     expect(sr.elicitation.mode).toBe("blocking");
   });
 });
