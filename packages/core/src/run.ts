@@ -9,6 +9,13 @@ export interface RunInput {
     payload: unknown;
     budget: number;
     maxDepth: number;
+    /**
+     * Optionaler harter USD-Ausgaben-Deckel für den gesamten Run (§v0.2). Anders als `budget`
+     * (Inv. 21: Erschöpfung eskaliert als Elicitation an den Menschen) stoppt ein überschrittener
+     * `maxCostUsd` den Lauf hart (gate:"stopped"). Wird über Resume mitgeführt (Teil von RunInput).
+     * Greift nur, wenn Nodes echte `cost.usd` melden (Provider-Profil mit `usdPerMTok`).
+     */
+    maxCostUsd?: number;
 }
 export interface RunRecord {
     id: string;

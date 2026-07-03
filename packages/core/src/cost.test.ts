@@ -20,6 +20,43 @@ describe("BudgetTracker — USD budget", () => {
   });
 });
 
+describe("BudgetTracker — hard USD cost cap (maxCostUsd, §v0.2)", () => {
+  it("no cap by default — isOverCostCap() always false", () => {
+    const b = new BudgetTracker(1e9, 100);
+    b.charge({ usd: 500 });
+    expect(b.maxCostUsd).toBeUndefined();
+    expect(b.isOverCostCap()).toBe(false);
+  });
+
+  it("trips once charged() reaches maxCostUsd (>=)", () => {
+    const b = new BudgetTracker(1e9, 100, 0, 0, 0, 5);
+    expect(b.isOverCostCap()).toBe(false);
+    b.charge({ usd: 4.99 });
+    expect(b.isOverCostCap()).toBe(false);
+    b.charge({ usd: 0.01 }); // total 5.00 == cap
+    expect(b.isOverCostCap()).toBe(true);
+  });
+
+  it("token-only cost never trips the cap (needs real cost.usd)", () => {
+    const b = new BudgetTracker(1e9, 100, 0, 0, 0, 1);
+    b.charge({ tokensIn: 1e6, tokensOut: 1e6 });
+    expect(b.isOverCostCap()).toBe(false);
+  });
+
+  it("child() and view() inherit the cap", () => {
+    const b = new BudgetTracker(100, 100, 0, 0, 0, 7);
+    expect(b.child().maxCostUsd).toBe(7);
+    expect(b.view().maxCostUsd).toBe(7);
+  });
+
+  it("cap is constructor-seedable (resume carries it via RunInput)", () => {
+    const b = new BudgetTracker(1e9, 100, 0, 4, 0, 5);
+    expect(b.isOverCostCap()).toBe(false);
+    b.charge({ usd: 1 }); // 4 (seeded) + 1 == cap
+    expect(b.isOverCostCap()).toBe(true);
+  });
+});
+
 describe("BudgetTracker — Outer-Loop iteration bound (Inv. 21, §4 4a)", () => {
   it("tickIteration() advances the iteration counter independent of cost", () => {
     const b = new BudgetTracker(1e9, 3);

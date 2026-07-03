@@ -29,6 +29,8 @@ export interface RunCommandOptions {
   payload?: unknown;
   /** Feature-spezifische Eingaben (z.B. { sourceCsv }, { outDir, brief }) — gereicht an den Provider. */
   params?: Record<string, unknown>;
+  /** Optionaler harter USD-Ausgaben-Deckel für den Run (§v0.2). Überschritten -> Run stoppt (gate:stopped). */
+  maxCostUsd?: number;
 }
 
 /**
@@ -56,7 +58,12 @@ export async function runCommand(
   // (z.B. unbekanntes Feature) entstehen erst beim Iterieren des (lazy) Streams -> hier umfassen.
   const stream = engine.startRun(
     feature,
-    { payload: opts.payload ?? {}, budget: 1000, maxDepth: 200 },
+    {
+      payload: opts.payload ?? {},
+      budget: 1000,
+      maxDepth: 200,
+      ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}),
+    },
     opts.params,
   );
   try {

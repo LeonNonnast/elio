@@ -5,7 +5,7 @@
 // treiben können. process.exit() passiert NUR im Executable-Guard ganz unten.
 //
 // Befehle:
-//   elio run <feature> [--csv|--out|--model|--ollama-url|--capture-dir|--payload|--no-prompt]
+//   elio run <feature> [--csv|--out|--model|--ollama-url|--capture-dir|--payload|--no-prompt|--max-cost-usd]
 //   elio resume [<feature>] <correlation-id> [answer]   (feature optional — Engine leitet es aus dem Store ab)
 //   elio runs [<feature>]                                (feature optional — der Store hält ALLE Features)
 //   elio --help | -h
@@ -183,9 +183,14 @@ export async function main(argv: string[], opts: MainOptions = {}): Promise<numb
         noPrompt?: boolean;
         payload?: unknown;
         params?: Record<string, unknown>;
+        maxCostUsd?: number;
       } = { noPrompt: parsed.flags["no-prompt"] === true };
       if (typeof parsed.flags["payload"] === "string") runOpts.payload = parsePayload(parsed.flags["payload"]);
       if (Object.keys(params).length > 0) runOpts.params = params;
+      if (typeof parsed.flags["max-cost-usd"] === "string") {
+        const cap = Number(parsed.flags["max-cost-usd"]);
+        if (Number.isFinite(cap) && cap >= 0) runOpts.maxCostUsd = cap;
+      }
       const res = await runCommand(engine, feature, io, runOpts);
       return res.exitCode;
     }

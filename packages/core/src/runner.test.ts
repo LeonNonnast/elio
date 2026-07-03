@@ -295,3 +295,83 @@ describe("OuterLoopRunner — 2-node graph end-to-end to DONE (§4/§8)", () => 
     expect(content["y"]).toBe("AABB"); // b derived its input from a's merged output
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// maxCostUsd — hard USD spend cap (§v0.2). Like budget/depth, it is checked at the
+// top of the outer loop, so it bounds how many further $-charging iterations run.
+// Unlike budget exhaustion (Inv. 21, which escalates as an elicitation "grant more?"),
+// an exceeded cost cap STOPS the run hard — no grant dialog.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("OuterLoopRunner — maxCostUsd hard cap (§v0.2)", () => {
+  // A self-looping node that charges $6/step, behind a gate that never passes — so the
+  // outer loop keeps iterating until a bound (cost cap here) stops it.
+  function runtime(): { runner: OuterLoopRunner } {
+    const registry = new NodeRegistry();
+    registry.register({
+      type: "spend",
+      klass: "orchestration",
+      handler: () =>
+        Promise.resolve({
+          status: "resolved" as const,
+          output: { tick: 1 },
+          confidence: 1,
+          cost: { usd: 6 }, // each iteration costs $6
+        }),
+    });
+    registry.register({
+      type: "never", // gate that never passes -> forces another outer-loop iteration
+      klass: "orchestration",
+      handler: () =>
+        Promise.resolve({
+          status: "resolved" as const,
+          output: { passed: false, failures: ["never"] },
+          confidence: 1,
+          cost: { usd: 0 },
+        }),
+    });
+    return { runner: new OuterLoopRunner({ registry, store: new InMemoryRunStore() }) };
+  }
+
+  const pack: FeaturePack = {
+    apiVersion: "elio/v1",
+    kind: "Feature",
+    metadata: { id: "core.spend", version: "1", owner: "t" },
+    contentHash: "core.spend@1",
+    feature: {
+      autonomy: "static",
+      artifact: { kind: "note", evalGate: "never" },
+      io: { input: {}, output: {} },
+      graph: {
+        state: {},
+        steps: [{ id: "a", type: "spend" }],
+        edges: [{ from: "a", to: "a" }], // self-loop
+      },
+    },
+  };
+
+  function spendSteps(events: RunEvent[]): number {
+    return events.filter((e) => e.type === "step-started" && e.nodeType === "spend").length;
+  }
+
+  it("stops hard (gate:stopped) once charged USD reaches the cap — no grant elicitation", async () => {
+    const { runner } = runtime();
+    // cap $5: iter1 spends $6, iter2's top-of-loop check trips (6 >= 5) -> exactly ONE spend step.
+    const events = await collect(runner.run(pack, { payload: {}, budget: 1e9, maxDepth: 100, maxCostUsd: 5 }));
+
+    const end = events[events.length - 1];
+    expect(end?.type).toBe("run-completed");
+    if (end?.type === "run-completed") expect(end.gate).toBe("stopped");
+    expect(spendSteps(events)).toBe(1);
+    // A cost cap must NOT surface a "grant more budget" elicitation (that is budget/depth only).
+    expect(events.find((e) => e.type === "node-suspended")).toBeUndefined();
+  });
+
+  it("a higher cap allows proportionally more $-charging iterations", async () => {
+    const { runner } = runtime();
+    // cap $13: runs while spent-before-iteration < 13 -> $0,$6,$12 -> three spend steps, then stops.
+    const events = await collect(runner.run(pack, { payload: {}, budget: 1e9, maxDepth: 100, maxCostUsd: 13 }));
+    const end = events[events.length - 1];
+    if (end?.type === "run-completed") expect(end.gate).toBe("stopped");
+    expect(spendSteps(events)).toBe(3);
+  });
+});

@@ -27,15 +27,32 @@ export class BudgetTracker {
   readonly initialBudget: number;
   readonly maxDepth: number;
   readonly depth: number;
+  /**
+   * Harter USD-Ausgaben-Deckel für den GESAMTEN Run (optional, §v0.2). Anders als `initialBudget`
+   * (Inv. 21: Erschöpfung eskaliert als Elicitation an den Menschen — "mehr freigeben?") ist dies
+   * eine harte Geld-Grenze: wird sie überschritten, STOPPT der Lauf (kein Grant-Dialog). `undefined`
+   * = kein Deckel (Default; rückwärtskompatibel). Greift nur, wenn Nodes echte `cost.usd` melden
+   * (Provider-Profil mit `usdPerMTok`); reine Token-Kosten triggern ihn nicht — der Iterations-Bound
+   * (`maxDepth`) bleibt das Backstop, genau wie beim Budget.
+   */
+  readonly maxCostUsd: number | undefined;
   private spent: number;
   private iterations: number;
 
-  constructor(initialBudget: number, maxDepth: number, depth = 0, spent = 0, iterations = 0) {
+  constructor(
+    initialBudget: number,
+    maxDepth: number,
+    depth = 0,
+    spent = 0,
+    iterations = 0,
+    maxCostUsd?: number,
+  ) {
     this.initialBudget = initialBudget;
     this.maxDepth = maxDepth;
     this.depth = depth;
     this.spent = spent;
     this.iterations = iterations;
+    this.maxCostUsd = maxCostUsd;
   }
 
   /** Verbleibendes Budget (kann negativ werden, wenn ein Call überzieht — Runner prüft). */
@@ -58,6 +75,15 @@ export class BudgetTracker {
   /** Budget erschöpft? */
   isExhausted(): boolean {
     return this.remaining() <= 0;
+  }
+
+  /**
+   * Harter USD-Deckel überschritten? Nur wirksam, wenn `maxCostUsd` gesetzt ist. Vergleicht die
+   * kumulativ verbuchten `cost.usd` (`charged()`) gegen den Deckel — der Runner stoppt den Lauf
+   * hart (kein Elicitation-Grant, anders als bei `isExhausted()`).
+   */
+  isOverCostCap(): boolean {
+    return this.maxCostUsd !== undefined && this.spent >= this.maxCostUsd;
   }
 
   /** Bisher gelaufene Outer-Loop-Iterationen. */
@@ -95,7 +121,7 @@ export class BudgetTracker {
    * wird beim Verbuchen des Kind-Cost via charge() dekrementiert.
    */
   child(): BudgetTracker {
-    return new BudgetTracker(this.remaining(), this.maxDepth, this.childDepth(), 0);
+    return new BudgetTracker(this.remaining(), this.maxDepth, this.childDepth(), 0, 0, this.maxCostUsd);
   }
 
   /**
@@ -107,7 +133,7 @@ export class BudgetTracker {
    * und node-lokal (transparent) mitbuchen kann, ohne doppelt zu dekrementieren.
    */
   view(): BudgetTracker {
-    return new BudgetTracker(this.remaining(), this.maxDepth, this.depth, 0);
+    return new BudgetTracker(this.remaining(), this.maxDepth, this.depth, 0, 0, this.maxCostUsd);
   }
 }
 

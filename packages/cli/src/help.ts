@@ -42,6 +42,8 @@ Flags (run):
   --capture-dir <d>  Verzeichnis der file-backed CaptureStore (events/summaries.jsonl) der pm.*-Features
                      (Default .elio/capture, sonst $ELIO_CAPTURE_DIR).
   --no-prompt        An einer node-suspended Elicitation NICHT prompten (suspendiert lassen).
+  --max-cost-usd <n> Harter USD-Ausgaben-Deckel für den Run — überschritten stoppt der Lauf
+                     (gate:stopped). Greift nur bei echten cost.usd (Provider-Profil mit usdPerMTok).
 
 build-skill (Skill-Generator):
   Interviewt den fehlenden Brief (name/description/purpose) an der Elicitation auf stdin

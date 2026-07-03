@@ -471,7 +471,7 @@ export class OuterLoopRunner implements Runner {
         const branch = newBranchId();
         const artifact = this.loadOrCreateArtifact(pack, input);
         this.runContexts.set(record.id, { pack, input, artifact, branch });
-        const budget = new BudgetTracker(input.budget, input.maxDepth, 0, 0);
+        const budget = new BudgetTracker(input.budget, input.maxDepth, 0, 0, 0, input.maxCostUsd);
         const state = structuredClone(graph.state ?? {}) as Record<string, unknown>;
         // Run-spezifischen Input für Nodes zugänglich machen (Slice 1 reichte payload an keinen Node durch):
         // unter `state.input` lesbar via {{state.input...}}. Additiv — bestehende Features nutzen den Key
@@ -555,7 +555,7 @@ export class OuterLoopRunner implements Runner {
             rc.input.budget += grant.budget;
             rc.input.maxDepth += grant.maxDepth;
         }
-        const budget = new BudgetTracker(rc.input.budget, rc.input.maxDepth, resume.depth, resume.spent, resume.iterations);
+        const budget = new BudgetTracker(rc.input.budget, rc.input.maxDepth, resume.depth, resume.spent, resume.iterations, rc.input.maxCostUsd);
         // Resume rehydriert ab dem letzten RESOLVED Step (resume.lastStepId) — der suspendierte Step wird
         // re-selektiert und re-ausgeführt. Das ist BEWUSST: manche Suspend-Nodes resolven sich beim
         // Re-Run selbst, sobald die Antwort im State liegt (sie lesen `{{state.answer}}`); ein nacktes
@@ -728,6 +728,12 @@ export class OuterLoopRunner implements Runner {
         let iterations = 0;
         while (iterations < HARD_CAP) {
             iterations += 1;
+            // 4a′: Harter USD-Deckel (§v0.2, maxCostUsd). Anders als Budget/Tiefe ist das eine Geld-Grenze,
+            // KEIN Verhandlungspunkt — der Lauf stoppt hart (root wie child), ohne Elicitation-Grant. Greift
+            // nur, wenn Nodes echte cost.usd melden (sonst bleibt der Iterations-Bound das Backstop).
+            if (budget.isOverCostCap()) {
+                return { kind: "completed", gate: "stopped" };
+            }
             // 4a: Budget/Tiefe erschöpft (Inv. 21, §4 Schritt 4a). Statt hart zu sterben, eskaliert der
             // Outer Loop als Elicitation an den Menschen ("mehr Budget/Tiefe freigeben?") + Checkpoint —
             // ein Resume mit mehr Budget/Tiefe setzt den Lauf an GENAU dieser Stelle fort. Nur der
@@ -942,6 +948,7 @@ export class OuterLoopRunner implements Runner {
         const rc = this.runContexts.get(runId);
         const rootBudget = rc !== undefined ? rc.input.budget : 0;
         const rootDepth = rc !== undefined ? rc.input.maxDepth : 0;
+        const rootMaxCostUsd = rc !== undefined ? rc.input.maxCostUsd : undefined;
         return {
             async runChild(spec: ChildBranchSpec) {
                 // feature-ref (§3): ein referenziertes Sub-Feature bringt seinen eigenen Graphen + Pack mit
@@ -950,7 +957,7 @@ export class OuterLoopRunner implements Runner {
                 const childPack = spec.pack ?? pack;
                 const state = structuredClone(spec.initialState);
                 // Kind-Branch erbt das Restbudget auf Tiefe 1 (Inv. 21); kein frisches Run-Budget pro Kind.
-                const budget = new BudgetTracker(rootBudget, rootDepth, 1, 0);
+                const budget = new BudgetTracker(rootBudget, rootDepth, 1, 0, 0, rootMaxCostUsd);
                 const events = [];
                 // runBranchSteps emittiert selbst in den Live-Stream (this.emit); die hier gesammelten Events
                 // gibt der Aufrufer (subworkflow) NICHT erneut in den Stream — sie sind bereits geflossen.
