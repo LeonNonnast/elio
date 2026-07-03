@@ -9,6 +9,7 @@
   <meta property="og:title" content="elio — Enterprise Loop Intelligence Orchestrator">
   <meta property="og:description" content="Artifact-centric Loop-Engine. Governance = Dependency Injection. 10 Pakete, 4 Oberflächen, real-verifiziert.">
   <meta name="theme-color" content="#0f1218">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='34' fill='none' stroke='%23f0743a' stroke-width='7'/%3E%3Cpath d='M50 34 L63.86 42 L63.86 58 L50 66 L36.14 58 L36.14 42 Z' fill='%2335b981'/%3E%3C/svg%3E">
   <style>
   :root {
     --ground: #f3f4f7;
@@ -278,7 +279,25 @@
 
 <header class="bar">
   <div class="bar-in">
-    <span class="brand"><span class="dot" aria-hidden="true"></span>elio</span>
+    <span class="brand"><svg class="brandmark" viewBox="0 0 100 100" width="24" height="24" role="img" aria-label="elio Logo" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        @keyframes elgRing{0%{stroke-dashoffset:213.6}22%,100%{stroke-dashoffset:0}}
+        @keyframes elgStroke{0%,42%{stroke:#f0743a}48%,86%{stroke:#35b981}92%,100%{stroke:#f0743a}}
+        @keyframes elgFill{0%,42%{fill:#f0743a}48%,86%{fill:#35b981}92%,100%{fill:#f0743a}}
+        @keyframes elgOp{0%{opacity:.2}10%,88%{opacity:1}95%,100%{opacity:.2}}
+        .brandmark .r{fill:none;stroke-width:5;stroke-dasharray:213.6;animation:elgRing 4.5s ease-in-out infinite,elgStroke 4.5s infinite}
+        .brandmark .s{animation:elgFill 4.5s infinite,elgOp 4.5s infinite}
+        .brandmark .s2{animation-delay:0s,.07s}.brandmark .s3{animation-delay:0s,.14s}.brandmark .s4{animation-delay:0s,.21s}.brandmark .s5{animation-delay:0s,.28s}.brandmark .s6{animation-delay:0s,.35s}
+        @media(prefers-reduced-motion:reduce){.brandmark .r{animation:none;stroke:#35b981;stroke-dashoffset:0}.brandmark .s{animation:none;fill:#35b981;opacity:1}}
+      </style>
+      <circle class="r" cx="50" cy="50" r="34"/>
+      <path class="s s1" d="M50 50 L50 34 L63.86 42 Z"/>
+      <path class="s s2" d="M50 50 L63.86 42 L63.86 58 Z"/>
+      <path class="s s3" d="M50 50 L63.86 58 L50 66 Z"/>
+      <path class="s s4" d="M50 50 L50 66 L36.14 58 Z"/>
+      <path class="s s5" d="M50 50 L36.14 58 L36.14 42 Z"/>
+      <path class="s s6" d="M50 50 L36.14 42 L50 34 Z"/>
+    </svg>elio</span>
     <nav class="sects" aria-label="Sektionen">
       <a href="#vision">Vision</a>
       <a href="#vorgehen">Vorgehen</a>
