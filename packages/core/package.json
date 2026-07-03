@@ -1,9 +1,21 @@
 {
   "name": "@elio/core",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "description": "ELIO Kern-Engine: Runner, Injector, ctx-Contracts, NodeResult/Elicitation-Primitive (kennt keine Fachlichkeit).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonnonnast/elio.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,6 +26,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   }
 }

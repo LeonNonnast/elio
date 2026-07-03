@@ -1,44 +1,43 @@
-// ───────────────────────────── Elicitation = universelles Suspend-Signal (Inv. 11) ─────────────────────────────
-// + Resume via correlation-id (Inv. 12).
-
 import type { JsonSchema, SerializedState } from "./common";
 import type { ArtifactRef } from "./artifact";
-
-export type SuspendMode = "blocking" | "parked" | "timeout" | "optional"; // Inv. 12
-
+export type SuspendMode = "blocking" | "parked" | "timeout" | "optional";
 export interface Answerer {
-  roles?: string[];
-  users?: string[];
-  /** Reine Maschinen-Antwort: Policy oder Parent-State kann auto-resolven. */
-  machine?: boolean;
+    roles?: string[];
+    users?: string[];
+    /** Reine Maschinen-Antwort: Policy oder Parent-State kann auto-resolven. */
+    machine?: boolean;
 }
-
 export interface Elicitation {
-  what: string; // was wird gebraucht / wofür Freigabe
-  whoCanAnswer: Answerer; // role | user | policy | parent-state
-  schema?: JsonSchema; // erwartete Form der Antwort
-  mode: SuspendMode; // Inv. 12
-  /** Default, falls mode = optional / timeout-default. */
-  default?: unknown;
-  deadline?: string; // ISO; nur für mode = timeout
-  onTimeout?: "fail" | "default" | "escalate";
+    what: string;
+    whoCanAnswer: Answerer;
+    schema?: JsonSchema;
+    mode: SuspendMode;
+    /** Default, falls mode = optional / timeout-default. */
+    default?: unknown;
+    deadline?: string;
+    onTimeout?: "fail" | "default" | "escalate";
 }
-
 export interface CorrelationId {
-  run: string;
-  branch: string;
-  step: string;
-  checkpoint: string;
+    run: string;
+    branch: string;
+    step: string;
+    checkpoint: string;
 }
-
 export interface Checkpoint {
-  id: string; // = CorrelationId.checkpoint
-  correlation: CorrelationId;
-  /** Rehydrierbarer, komprimierter State (Artefakt-Referenz + Branch-lokaler State). */
-  state: SerializedState;
-  artifactRef: ArtifactRef; // was die Session-Grenze kreuzt (Inv. 4)
-  /** Gepinnte Pack-Version (content-hash); Resume gegen geänderten Pack → reject/Migration (§11/#14). */
-  packVersion: string;
-  pendingElicitation?: Elicitation;
-  createdAt: string;
+    id: string;
+    correlation: CorrelationId;
+    /** Rehydrierbarer, komprimierter State (Artefakt-Referenz + Branch-lokaler State). */
+    state: SerializedState;
+    artifactRef: ArtifactRef;
+    /**
+     * Vollständiger, serialisierter Artefakt-Snapshot (SerializedArtifact) — erlaubt es einem NEUEN Prozess,
+     * das Artefakt für einen cross-process Resume zu deserialisieren (der Run-Kontext wird sonst nur
+     * in-memory gehalten). Bewusst `unknown` getypt, um keinen Import-Zyklus elicitation -> artifact-impl
+     * zu erzeugen; der Runner serialisiert/deserialisiert mit dem konkreten Typ.
+     */
+    artifactSnapshot?: unknown;
+    /** Gepinnte Pack-Version (content-hash); Resume gegen geänderten Pack → reject/Migration (§11/#14). */
+    packVersion: string;
+    pendingElicitation?: Elicitation;
+    createdAt: string;
 }
