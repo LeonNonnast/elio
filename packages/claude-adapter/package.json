@@ -2,7 +2,7 @@
   "name": "@elio/claude-adapter",
   "version": "0.0.0",
   "type": "module",
-  "description": "Claude-Integration: bindet Claude Code als OPAKE agent-Node-Engine (Inv. 18). Mappt SessionContract <-> einen pluggable ClaudeTransport (Agent SDK / claude -p / Fake), erbt+dekrementiert Budget/Tiefe über die Boundary (Inv. 21), propagiert Elicitations hoch (Inv. 11). HULL-Governance: cwd, injizierte Creds/Scopes, Task-Prompt, Sandbox, Budget, Output-Gate — KEINE per-Call Modell-Governance (opak). Ehrlichkeit: nur der FakeTransport wird von Tests exercised; AgentSdk-/ClaudeCli-Transport kompilieren + sind getypt, aber guarded (nur bei vorhandenem Key/SDK/CLI aktiv).",
+  "description": "Claude-Integration: bindet Claude Code als OPAKE agent-Node-Engine (Inv. 18). Mappt SessionContract <-> einen pluggable ClaudeTransport (Agent SDK / claude -p / Fake), erbt+dekrementiert Budget/Tiefe über die Boundary (Inv. 21), propagiert Elicitations hoch (Inv. 11). HULL-Governance: cwd, injizierte Creds/Scopes, Task-Prompt, Sandbox, Budget, Output-Gate — KEINE per-Call Modell-Governance (opak). Ehrlichkeit: die HULL-Mapping-/Parse-Logik beider realer Transports wird OFFLINE getestet (AgentSdk via injizierbarem loadQuery-Stub, ClaudeCli via Fake-Bin — kein Key/Netz); ECHTE Live-Calls sind env-guarded (ELIO_RUN_REAL_CLAUDE[_CLI]) und laufen nur opt-in. Der Agent-SDK ist eine optionalDependency (lazy importiert, nicht hart verdrahtet).",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -30,8 +30,10 @@
     "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.195",
     "@elio/core": "workspace:*",
     "@elio/sdk": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.195"
   }
 }
