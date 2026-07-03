@@ -1,0 +1,17 @@
+{
+  "//": "ELIO process-mining capture hooks (Slice 4). NOT active. To enable: merge this `hooks` block into .claude/settings.json (project-local; .claude is git-ignored) and restart the Claude Code session. To disable: remove the block. See docs/elio-process-mining.md §7. Requires a prior `pnpm build` (the glue calls packages/cli/dist/bin.js).",
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "node scripts/pm-capture-hook.mjs", "async": true } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "node scripts/pm-capture-hook.mjs", "async": true } ] }
+    ],
+    "PostToolUseFailure": [
+      { "hooks": [ { "type": "command", "command": "node scripts/pm-capture-hook.mjs", "async": true } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "node scripts/pm-capture-hook.mjs", "async": true } ] }
+    ]
+  }
+}

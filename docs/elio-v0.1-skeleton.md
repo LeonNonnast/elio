@@ -423,6 +423,7 @@ export interface SessionContract {
   memorySlice?: unknown;
   budget: number;                       // PFLICHT, propagiert + dekrementiert (Inv. 21)
   depth: number;                        // aktuelle Tiefe; gegen maxDepth geprüft (Inv. 21)
+  maxDepth: number;                     // PFLICHT, Rekursions-Ceiling; Engine bricht bei depth >= maxDepth ab (Inv. 21)
 }
 /** hoch: Ergebnis ODER Elicitation. */
 export type SessionResult = { result: NodeResult } | { elicitation: Elicitation };

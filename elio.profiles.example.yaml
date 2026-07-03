@@ -1,0 +1,32 @@
+# ───────────────────────────── elio.profiles.example.yaml ─────────────────────────────
+# Named provider profiles. Copy to `elio.profiles.yaml` (cwd) or point $ELIO_PROFILES at it.
+# A feature pins `provider: <name>` + `model: <id>`; the environment supplies endpoints/creds here.
+# Secrets are REFERENCED by name (apiKeySecret) and resolved via the SecretsProvider — never inlined.
+
+profiles:
+  # Local Ollama — free, offline-ish (needs a running Ollama).
+  fast-local:
+    kind: ollama
+    baseUrl: http://localhost:11434
+    defaultModel: llama3
+    cost: { tier: free }
+
+  # Azure OpenAI — prod deployment. apiKeySecret is resolved from the env/secrets provider.
+  prod-azure:
+    kind: azure-openai
+    endpoint: https://my-resource.openai.azure.com
+    deployment: gpt-4o
+    apiVersion: "2024-10-21"
+    apiKeySecret: AZURE_PROD_KEY
+    cost: { tier: high, usdPerMTok: { in: 2.5, out: 10 } }
+
+  # Anthropic Claude — for review/judge steps.
+  review:
+    kind: claude
+    apiKeySecret: ANTHROPIC_API_KEY
+    cost: { tier: high, usdPerMTok: { in: 5, out: 25 } }
+
+  # Deterministic mock — handy as an explicit, named offline profile.
+  offline:
+    kind: mock
+    cost: { tier: free }
