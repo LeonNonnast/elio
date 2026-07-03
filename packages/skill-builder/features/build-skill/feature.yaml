@@ -1,0 +1,97 @@
+apiVersion: elio/v1
+kind: Feature
+metadata:
+  id: build-skill
+  version: 0.1.0
+  owner: solo-dev
+  lifecycle: draft
+
+feature:
+  autonomy: guided # Draft-Schritt guided; Runtime deterministisch (Inv. 9)
+  artifact:
+    kind: skill # ein Claude-Code-Skill (SKILL.md) IST das Artefakt (Inv. 1)
+    evalGate: skill_well_formed # Exit-Condition: SKILL.md valide UND geschrieben
+
+  io:
+    # Der Skill-Brief (Brief wird injiziert; Pflichtfelder name/description/purpose, fehlende -> Interview).
+    input:
+      $ref: ./schemas/brief.schema.json
+    output:
+      $ref: ./schemas/skill-output.schema.json
+
+  policies:
+    - skill_write_requires_approval # side-effect-Gate vor dem Disk-Write (tighten-only, Inv. 13)
+
+  graph:
+    state:
+      brief: null
+      answer: null
+      skillName: ""
+      skillDescription: ""
+      skillPurpose: ""
+      skillWhenToUse: ""
+      skillInstructions: ""
+      skillMd: ""
+    steps:
+      # collect_brief: prüft die Pflichtfelder; fehlt eines -> Elicitation (= INTERVIEW). Auf Resume füllt
+      # die Antwort ({{state.answer}}) das zuletzt gefragte Feld. Vollständig -> Brief-Felder in den State.
+      - id: collect_brief
+        type: skill.collect_brief
+        with:
+          answer: "{{state.answer}}"
+        outputs:
+          skillName: state.skillName
+          skillDescription: state.skillDescription
+          skillPurpose: state.skillPurpose
+          skillWhenToUse: state.skillWhenToUse
+          skillInstructions: state.skillInstructions
+
+      # draft_skill: draftet den SKILL.md-TEXT. Deterministisches valides Skelett aus dem Brief; ist
+      # ctx.model present, reichert es den Body via one-shot llm an. system/prompt sind file-refs -> der
+      # Loader löst sie zu ihrem INHALT auf; die {{state.*}}-Templates im prompt löst der Runner auf.
+      - id: draft_skill
+        type: skill.draft_skill
+        with:
+          system: ./prompts/draft.system.md
+          prompt: ./prompts/draft.user.md
+          maxTokens: 1024
+        outputs:
+          skillName: state.skillName
+          skillMd: state.skillMd
+
+      # validate_skill: validate-Style Node -> GateVerdict (Frontmatter parsebar, name kebab-case,
+      # description einzeilig+nichtleer, Body nichtleer). Failures gelistet.
+      - id: validate_skill
+        type: skill.validate_skill
+        with:
+          skillMd: "{{state.skillMd}}"
+          skillName: "{{state.skillName}}"
+
+      # approve_write: built-in approval-Gate (Inv. 11/12). suspend blocking -> hält bis zur Freigabe des
+      # irreversiblen Disk-Writes.
+      - id: approve_write
+        type: approval
+        suspend: blocking
+        with:
+          reason: "Write SKILL.md to disk (irreversible side-effect)"
+
+      # write_skill: schreibt <outDir>/<skillName>/SKILL.md über ctx.fs (ScopedFsService, auf outDir
+      # confined). Läuft NUR NACH einer ZUSTIMMENDEN Approval (Edge-Guard state.answer.approved == true);
+      # bei einer Ablehnung wird die Edge NICHT genommen, write_skill läuft nie, nichts wird geschrieben,
+      # und der Lauf endet mit gate "stopped". `approved` ist auch in den State gespiegelt (defense in
+      # depth: write_skill liest es via {{state.approved}} und no-op't bei Ablehnung).
+      - id: write_skill
+        type: skill.write_skill
+        with:
+          skillMd: "{{state.skillMd}}"
+          skillName: "{{state.skillName}}"
+          approved: "{{state.answer}}"
+
+    edges:
+      - { from: collect_brief, to: draft_skill }
+      - { from: draft_skill, to: validate_skill }
+      - { from: validate_skill, to: approve_write }
+      # Der Write ist an die ZUSTIMMUNG gebunden: nur eine approve-Antwort ({approved:true}) nimmt die Edge.
+      # Eine Ablehnung ({approved:false}) ODER irgendeine andere Antwort lässt die Edge ungenommen ->
+      # nextEdge liefert DONE -> Gate prüft -> `written` ist false -> gate "stopped" (nichts geschrieben).
+      - { from: approve_write, to: write_skill, when: "state.answer.approved == true" }

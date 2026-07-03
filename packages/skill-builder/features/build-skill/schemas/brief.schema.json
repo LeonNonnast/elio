@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SkillBrief",
+  "type": "object",
+  "required": ["name", "description", "purpose"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "kebab-case skill name (lowercase letters, digits, dashes); equals the directory name"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "one-line what-it-does + when-to-use trigger; no line breaks"
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1,
+      "description": "what the skill is for"
+    },
+    "whenToUse": {
+      "type": "string",
+      "description": "optional explicit when-to-use guidance"
+    },
+    "instructions": {
+      "type": "string",
+      "description": "optional raw author instructions folded into the body"
+    },
+    "outDir": {
+      "type": "string",
+      "description": "optional output directory; the skill is written to <outDir>/<name>/SKILL.md"
+    }
+  },
+  "additionalProperties": true
+}

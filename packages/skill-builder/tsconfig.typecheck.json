@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "paths": {
+      "@elio/core": ["../core/src/index.ts"],
+      "@elio/sdk": ["../sdk/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

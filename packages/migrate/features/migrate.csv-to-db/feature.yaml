@@ -1,0 +1,120 @@
+apiVersion: elio/v1
+kind: Feature
+metadata:
+  id: migrate.csv-to-db
+  version: 0.1.0
+  owner: solo-dev
+  lifecycle: draft
+
+feature:
+  autonomy: guided # Mapping-Agent guided; Runtime deterministisch (Inv. 9)
+  artifact:
+    kind: migration-script # das Skript IST das Artefakt (Inv. 1)
+    evalGate: sample_passes # Exit-Condition: Sample läuft sauber durch (im Ziel committed)
+
+  io:
+    input:
+      type: object
+      properties:
+        source: {}
+        targetSchema: {}
+    output:
+      $ref: ./schemas/target.schema.json
+
+  policies:
+    - commit_requires_approval # side-effect-Gate (tighten-only, Inv. 13)
+
+  graph:
+    state:
+      sampleRows: []
+      mapping: null
+      proposal: null
+      targetSchema: ["id", "name", "email"]
+    steps:
+      # read_source: injizierter Quell-Adapter-Service (CSV), KEIN Denken (Klasse 1).
+      - id: read_source
+        type: migrate.read_source
+        outputs:
+          rows: state.sampleRows
+
+      # sample-first statt Blind-Run: erste N Zeilen.
+      - id: sample
+        type: transform
+        with:
+          take: 20
+          from: "{{state.sampleRows}}"
+        outputs:
+          value: state.sampleRows
+
+      # propose_mapping: Klasse 2 (delegierte Intelligenz, Vela optional) — ctx.model (MockModel default).
+      # system/user sind file-refs auf prompts/*.md — der Loader löst sie zu ihrem INHALT auf, sodass
+      # das Modell die Prompt-TEXTE bekommt (nicht die Pfade). Der user-Prompt trägt {{state.*}}-Templates,
+      # die der Runner gegen den branchState auflöst.
+      - id: propose_mapping
+        type: agent
+        with:
+          system: ./prompts/mapping.system.md
+          prompt: ./prompts/mapping.user.md
+          maxTurns: 1
+        outputs:
+          output: state.proposal
+
+      # parse_mapping: faltet den Agent-Vorschlag in ein nutzbares Mapping-Objekt (deterministisch).
+      - id: parse_mapping
+        type: migrate.parse_mapping
+        with:
+          proposal: "{{state.proposal}}"
+        outputs:
+          mapping: state.mapping
+
+      # stage: sampleRows + mapping ins geteilte Artefakt schreiben (Quelle für die per-record-Kinder).
+      - id: stage
+        type: migrate.stage
+        with:
+          rows: "{{state.sampleRows}}"
+          mapping: "{{state.mapping}}"
+
+      # run_on_sample: per-record Loop; jede Zeile = eigener Kind-Branch + eigene correlation-id
+      # (per-record = nested Outer Loop, Rekursion, Inv. 8). Der Sample-Loop fächert bei jedem Run über
+      # ALLE Sample-Zeilen (transform/validate sind rein/deterministisch -> harmlos re-runbar); die
+      # Idempotenz (nur fehlende/fehlgeschlagene Records schreiben) lebt im commit-Effect-Ledger (§11/#11).
+      - id: run_on_sample
+        type: subworkflow
+        with:
+          forEach: "{{state.sampleRows}}"
+          itemKey: record
+          steps:
+            - id: transform_record
+              type: migrate.transform_record
+            - id: validate_record # validation-gate (gegen ./schemas/target.schema.json)
+              type: migrate.validate_record
+
+      # dry_run: dry-run zuerst, kein Prod-Write.
+      - id: dry_run
+        type: transform
+        with:
+          mode: dry-run
+
+      # commit: side-effect-Approval-Gate (Inv. 11/12). suspend blocking -> hält bis zur Freigabe.
+      - id: commit
+        type: approval
+        suspend: blocking
+        with:
+          reason: "Commit ins Prod-Ziel"
+
+      # commit_write: BATCH-Massenschreiben ins Ziel (idempotent, §11/#11) — distinkt vom per-record
+      # Sample-subworkflow. Läuft NUR bei ZUSTIMMUNG (Edge-Guard unten); eine Ablehnung schreibt nichts.
+      - id: commit_write
+        type: migrate.commit
+
+    edges:
+      - { from: read_source, to: sample }
+      - { from: sample, to: propose_mapping }
+      - { from: propose_mapping, to: parse_mapping }
+      - { from: parse_mapping, to: stage }
+      - { from: stage, to: run_on_sample }
+      - { from: run_on_sample, to: dry_run }
+      - { from: dry_run, to: commit }
+      # Der Prod-Write ist an die ZUSTIMMUNG gebunden (Inv. 11/12): nur eine approve-Antwort
+      # ({approved:true}) nimmt die Edge; eine Ablehnung schreibt NICHTS (bleibt beim dry_run).
+      - { from: commit, to: commit_write, when: "state.answer.approved == true" }

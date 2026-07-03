@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SkillOutput",
+  "type": "object",
+  "required": ["skillName", "skillMd"],
+  "properties": {
+    "skillName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "kebab-case skill name = the SKILL.md frontmatter name = the directory name"
+    },
+    "skillMd": {
+      "type": "string",
+      "minLength": 1,
+      "description": "the full SKILL.md text (YAML frontmatter + markdown body)"
+    },
+    "path": {
+      "type": "string",
+      "description": "absolute path the SKILL.md was written to (set after write_skill)"
+    }
+  },
+  "additionalProperties": true
+}
