@@ -6,7 +6,7 @@
 import { createRuntime, loadFeaturePackFromFile } from "@elio/sdk";
 import type { FeatureProvider } from "./provider";
 import { modelOptsFrom } from "./provider";
-import { draftUntilGoodProvider, localAgentProvider, retryThenPassProvider } from "./providers/demo";
+import { draftUntilGoodProvider, helloProvider, localAgentProvider, retryThenPassProvider } from "./providers/demo";
 import { migrateProvider } from "./providers/migrate";
 import { skillBuilderProvider } from "./providers/skill-builder";
 import { discoverProvider, eventLogProvider, sessionSummaryProvider } from "./providers/process-mining";
@@ -44,11 +44,12 @@ export class FeatureCatalog {
 
 /**
  * Der Standard-Katalog: alle built-in Feature-Provider. EINE Quelle der Wahrheit — vorher dreifach
- * (demo×2 + local-agent + migrate + build-skill + pm×3). Provider werden lazy gebaut (Pack-Laden erst beim
+ * (hello + demo×2 + local-agent + migrate + build-skill + pm×3). Provider werden lazy gebaut (Pack-Laden erst beim
  * Factory-Aufruf), aber der Katalog selbst materialisiert sie einmal beim Bau.
  */
 export function defaultCatalog(): FeatureCatalog {
   return new FeatureCatalog([
+    helloProvider(),
     draftUntilGoodProvider(),
     retryThenPassProvider(),
     localAgentProvider(),

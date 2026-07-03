@@ -38,6 +38,14 @@ export {
   NOTE_TYPE,
 } from "./demo/retry-then-pass";
 export {
+  helloPack,
+  polishGreetingNode,
+  greetingReadyGate,
+  setupHello,
+  polishGreeting,
+  greetingFailures,
+} from "./demo/hello";
+export {
   localAgentPack,
   localMinLengthGate,
   setupLocalAgent,

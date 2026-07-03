@@ -3,11 +3,21 @@
 // createDemoRuntime / createLocalAgentRuntime (kein eigenes Wiring). Alle drei sind capabilities.model=false:
 // die Mock-Demos laufen offline, der local-agent verdrahtet Ollama selbst (nimmt keine Engine-`models`).
 
-import { createDemoRuntime, createLocalAgentRuntime, draftUntilGoodPack, localAgentPack, retryThenPassPack } from "@elio/sdk";
+import { createDemoRuntime, createLocalAgentRuntime, draftUntilGoodPack, helloPack, localAgentPack, retryThenPassPack } from "@elio/sdk";
 import type { FeatureProvider } from "../provider";
 import { storeOptFrom } from "../provider";
 
 const DEMO_CAPS = { model: false, db: false, fs: "none", traces: false, ephemeralStore: false } as const;
+
+/** demo.hello — der Aha-Case: der Loop poliert einen Gruß, bis eine Qualitäts-Checkliste besteht (offline). */
+export function helloProvider(): FeatureProvider {
+  return {
+    id: helloPack.metadata.id,
+    pack: helloPack,
+    capabilities: { ...DEMO_CAPS },
+    setup: (ctx) => ({ runtime: createDemoRuntime(storeOptFrom(ctx, DEMO_CAPS)), pack: helloPack }),
+  };
+}
 
 /** demo.draft-until-good — Outer-Loop draftet, bis ein min-length-Gate passt (MockModel). */
 export function draftUntilGoodProvider(): FeatureProvider {

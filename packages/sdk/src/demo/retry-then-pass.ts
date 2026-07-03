@@ -14,6 +14,7 @@ import type {
 import { createRuntime } from "../runtime";
 import type { Runtime } from "../runtime";
 import { setupDraftUntilGood, TEXT_DOC_TYPE } from "./draft-until-good";
+import { setupHello } from "./hello";
 
 /** Pro Runtime: zählt die Versuche der flaky-Node (sodass jeder Run frisch startet). */
 const ATTEMPTS = new WeakMap<object, number>();
@@ -114,5 +115,6 @@ export function createDemoRuntime(opts: { store?: InMemoryRunStore } = {}): Runt
   });
   setupDraftUntilGood(runtime);
   setupRetryThenPass(runtime);
+  setupHello(runtime);
   return runtime;
 }

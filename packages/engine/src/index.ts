@@ -29,6 +29,7 @@ export type {
 
 // Built-in Provider (für eigene Katalog-Zusammenstellungen / Tests).
 export {
+  helloProvider,
   draftUntilGoodProvider,
   retryThenPassProvider,
   localAgentProvider,

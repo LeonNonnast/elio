@@ -38,21 +38,22 @@ Runs `vitest run` — **502 tests** green; typecheck + lint clean.
 After `pnpm install && pnpm build`:
 
 ```bash
-# 1. Run a demo feature through the CLI (offline, deterministic — uses MockModel)
-node packages/cli/dist/bin.js run demo.draft-until-good
+# 1. Run the hello-world feature through the CLI (offline, deterministic)
+#    -> the Outer Loop polishes a greeting until a quality checklist passes ("Hello world!")
+node packages/cli/dist/bin.js run demo.hello
 
 # 2. Open the Studio dashboard (seeds itself with sample runs + an approval)
 node packages/studio/dist/bin.js
 #    -> open http://localhost:4123 in your browser
 ```
 
-`elio run demo.draft-until-good` streams `RunEvent`s and exits `0` when the run completes with `gate=passed`. Studio listens on `http://localhost:4123` and shows live run status, the loop tape, an SSE update log, and an approval inbox.
+`elio run demo.hello` streams `RunEvent`s and exits `0` when the run completes with `gate=passed`. Studio listens on `http://localhost:4123` and shows live run status, the loop tape, an SSE update log, and an approval inbox.
 
 For the full walkthrough see **[docs/elio-usage.md](docs/elio-usage.md)**.
 
 ## The four surfaces at a glance
 
-All three client surfaces are thin `@elio/sdk` clients; the demos are offline and deterministic (MockModel). The available features everywhere are `demo.draft-until-good`, `demo.retry-then-pass`, `migrate.csv-to-db`, and `build-skill` — the skill-generator meta-vertical whose artifact is a Claude-Code SKILL.md, with the brief elicited at the prompt or supplied up front (plus, for the CLI, a path to a `feature.yaml`).
+All three client surfaces are thin `@elio/sdk` clients; the demos are offline and deterministic (MockModel). The available features everywhere are `demo.hello` (the offline hello-world — the Outer Loop polishing a greeting until a quality gate passes), `demo.draft-until-good`, `demo.retry-then-pass`, `migrate.csv-to-db`, and `build-skill` — the skill-generator meta-vertical whose artifact is a Claude-Code SKILL.md, with the brief elicited at the prompt or supplied up front (plus, for the CLI, a path to a `feature.yaml`).
 
 One additional **online** demo runs on the CLI/SDK: **`demo.local-agent`** — a local **Ollama** agent drives the Outer Loop. `ctx.agent` is the transparent in-process engine (a bounded multi-turn loop, **no LangGraph**) whose model calls flow through `ctx.model` → an `OllamaModel` on `http://localhost:11434`. Run it with `node packages/cli/dist/bin.js run demo.local-agent` after `ollama pull llama3`; see [docs/elio-usage.md](docs/elio-usage.md#run-a-local-ollama-agent-demolocal-agent).
 

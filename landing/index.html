@@ -531,34 +531,34 @@
 <span class="p">$</span> pnpm install
 <span class="p">$</span> pnpm build          <span class="c"># Root-Build (nicht  pnpm -r build)</span>
 
-<span class="c"># 2 · ein Feature offline fahren (MockModel, deterministisch)</span>
-<span class="p">$</span> node packages/cli/dist/bin.js run demo.draft-until-good
-<span class="o">  → streamt RunEvents, exit 0 bei gate=passed</span>
+<span class="c"># 2 · den Aha-Case offline fahren (deterministisch, kein Key, kein Netz)</span>
+<span class="p">$</span> node packages/cli/dist/bin.js run demo.hello
+<span class="o">  → poliert einen Gruß in der Schleife, bis alle Checks grün sind → "Hello world!"</span>
 
 <span class="c"># 3 · Studio-Dashboard: live Runs, Loop-Tape, Approval-Inbox</span>
 <span class="p">$</span> node packages/studio/dist/bin.js
 <span class="o">  → http://localhost:4123</span>
 
-<span class="c"># echtes Modell? Provider-Profil pinnen:</span>
-<span class="p">$</span> node packages/cli/dist/bin.js run migrate.csv-to-db \
+<span class="c"># echtes Modell einsetzen + Ausgaben deckeln (v0.2):</span>
+<span class="p">$</span> node packages/cli/dist/bin.js run build-skill \
       --model ollama:llama3 --max-cost-usd 0.50</code></pre>
         </figure>
 
         <div class="entry">
           <div class="card">
-            <span class="kicker">Einstieg · offline</span>
-            <h3>demo.draft-until-good</h3>
-            <p>Der Outer Loop pur: draften → validieren → wiederholen, bis das Gate hält. Kein Key, kein Netz.</p>
+            <span class="kicker">Start hier · der Aha-Case</span>
+            <h3>demo.hello</h3>
+            <p>Gib ein Ziel + eine Qualitäts-Prüfung — der Loop poliert einen Entwurf, behebt die Mängel <b>einen nach dem anderen</b> und stoppt, sobald alle Checks grün sind. Offline, in 3 Iterationen sichtbar.</p>
           </div>
           <div class="card">
-            <span class="kicker">Reale Vertikale</span>
-            <h3>migrate.csv-to-db</h3>
-            <p>LLM-Mapping CSV→DB mit governtem Commit-<b>Approval</b> — idempotent, per <code>--model</code> auf echte Provider.</p>
+            <span class="kicker">Echte Intelligenz</span>
+            <h3>demo.local-agent</h3>
+            <p>Derselbe Loop, aber ein lokaler <b>Ollama</b>-Agent denkt (über <code>ctx.model</code>). Der <code>polish</code>-Schritt wird zum echten Modell — sonst ändert sich nichts.</p>
           </div>
           <div class="card">
-            <span class="kicker">Meta</span>
+            <span class="kicker">Governance sichtbar</span>
             <h3>build-skill</h3>
-            <p>Interviewt einen Brief und schreibt eine Claude-Code <code>SKILL.md</code> — governter fs-Write.</p>
+            <p>Interviewt einen Brief, draftet eine Claude-Code <code>SKILL.md</code>, und schreibt sie erst nach einem <b>Human-Approval</b> — governter fs-Write.</p>
           </div>
           <div class="card">
             <span class="kicker">Einbetten</span>
