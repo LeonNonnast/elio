@@ -304,8 +304,9 @@
       <a href="#umsetzung">Umsetzung</a>
       <a href="#ergebnisse">Ergebnisse</a>
       <a href="#loslegen">Loslegen</a>
+      <a href="#eigener-prozess">Eigener Prozess</a>
     </nav>
-    <span class="pill-live"><span class="g" aria-hidden="true"></span>v0.2 · 719 Tests grün</span>
+    <span class="pill-live"><span class="g" aria-hidden="true"></span>v0.2 · 722 Tests grün</span>
   </div>
 </header>
 
@@ -347,7 +348,7 @@
         <span class="sec-no">01</span>
         <div>
           <h2 class="sec-title">Projektvision</h2>
-          <p class="sec-lede">Eine Loop-Engine, keine Workflow-Engine. Das Ziel ist das Artefakt — Loops sind die Lösung, Context die eigentliche Aufgabe.</p>
+          <p class="sec-lede">Eine Loop-Engine, keine Workflow-Engine — mit der Ambition, <b>beliebige</b> Prozesse agentisch lösbar zu machen. Das Ziel ist das Artefakt, der Loop ist die Lösung, und jeder Step ist eine von außen deklarierte Node.</p>
         </div>
       </div>
 
@@ -380,6 +381,42 @@
             <p>Der Injector baut das <code>ctx</code> pro Node aus der Policy. Kein Runtime-Permission-Check: eine Node <b>kann</b> nicht, was nicht injiziert wurde. Audit = was möglich war.</p>
           </div>
         </div>
+      </div>
+
+      <!-- node kinds: jeder Prozess-Step ist eine Node -->
+      <div class="reveal" style="margin-top:38px">
+        <span class="kicker" style="display:block;margin-bottom:10px">Jeder Prozess wird ein Loop — jeder Step eine Node</span>
+        <p class="sec-lede" style="max-width:74ch;margin:0 0 18px">
+          Was ein Durchlauf tut, steht in einer <code>feature.yaml</code> — <b>von außen definiert</b>, ohne Änderung an der Runtime. Ein Step ist immer eine Node mit derselben Signatur <code>(input, ctx)</code>; die Art variiert, der Vertrag nicht:
+        </p>
+        <div class="princ">
+          <div class="row"><div class="k">Skript</div><div class="v">Deterministische Nodes — <code>transform · validate · db · file · http</code>. Reine Funktionen, kein Modell: ~gratis, reproduzierbar, auditierbar.</div></div>
+          <div class="row"><div class="k">Agent · LLM</div><div class="v">Delegierte Intelligenz — <code>agent</code> (mehrturnig, z.&nbsp;B. Vela · Claude · Ollama) und <code>llm</code>. Hier — und nur hier — wird „gedacht".</div></div>
+          <div class="row"><div class="k">Subworkflow</div><div class="v">Ein ganzes Feature als Node in einem anderen: Loops schachteln sich, große Prozesse setzen sich aus kleineren zusammen.</div></div>
+          <div class="row"><div class="k">Human-in-the-Loop</div><div class="v">Der <code>approval</code>-Node pausiert den Loop, ein Mensch entscheidet, Resume trägt über die Prozessgrenze — Freigabe als erstklassiger Schritt, nicht als Sonderfall.</div></div>
+          <div class="row"><div class="k">Quality-Gate</div><div class="v">Der <code>validate</code>/Eval-Node <b>ist</b> die Exit-Bedingung: er entscheidet, ob das Artefakt „gut genug" ist — oder der Loop noch einen Lap dreht.</div></div>
+        </div>
+      </div>
+
+      <!-- retro / self-learning: der Loop verbessert sich selbst -->
+      <div class="reveal" style="margin-top:38px">
+        <span class="kicker" style="display:block;margin-bottom:10px">Der Loop verbessert sich selbst — intrinsisch &amp; extrinsisch</span>
+        <p class="sec-lede" style="max-width:74ch;margin:0 0 18px">
+          Das <b>Loop-Tape ist schon der Trainingsdatensatz</b> (Inv. 15): jeder Step wird mit Input, Output, Kosten und Confidence aufgezeichnet. Retro-Loops und Self-Learning lesen dieses Tape und geben die Erkenntnis in die Loops zurück.
+        </p>
+        <div class="cards g2">
+          <div class="card">
+            <span class="kicker">intrinsisch · im Lauf</span>
+            <h3>Jeder Lap baut auf dem letzten auf</h3>
+            <p>Der Outer Loop ist selbst die Korrektur: jede Iteration liest das vorige Artefakt plus das Gate-Feedback und behebt die Mängel gezielt — sichtbar schon im <code>demo.hello</code>. Episodic Memory (<code>memo</code>) trägt Erkenntnisse über die Laps.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">extrinsisch · über Läufe</span>
+            <h3>Die Engine optimiert die Engine</h3>
+            <p>Read-only Miner (<code>traces:read</code>) entdecken über viele Runs Muster — etwa deterministische Stellen, die heute ein teures LLM fährt. Ein menschlich gegatetes <code>promote-candidate</code> härtet sie zu einer neuen, versionierten Pack-Variante zurück. Der heiße Pfad wird nie angefasst.</p>
+          </div>
+        </div>
+        <p class="cross" style="margin-top:16px">Miner &amp; Promotion sind gebaut und getestet; der <b>geschlossene</b> Self-Learning-Kreis im Betrieb ist die Richtung — <a href="https://github.com/LeonNonnast/elio/blob/main/docs/elio-learning-engine.md" target="_blank" rel="noopener" style="color:var(--accent-deep);text-decoration:none">docs/elio-learning-engine.md</a></p>
       </div>
     </div>
   </section>
@@ -489,7 +526,7 @@
       </div>
 
       <div class="metrics reveal" style="margin-bottom:16px">
-        <div class="metric"><div class="n">719<small> / 3 skip</small></div><div class="cap">Tests grün · 93 Dateien</div></div>
+        <div class="metric"><div class="n">722<small> / 3 skip</small></div><div class="cap">Tests grün · 94 Dateien</div></div>
         <div class="metric"><div class="n">10</div><div class="cap">Pakete · 1 Monorepo</div></div>
         <div class="metric"><div class="n">~22k</div><div class="cap">Zeilen Kern-TypeScript</div></div>
         <div class="metric"><div class="n">0</div><div class="cap">Typecheck- / Lint-Fehler</div></div>
@@ -583,6 +620,89 @@
             <span class="kicker">Einbetten</span>
             <h3>als MCP oder SDK</h3>
             <p><code>elio-mcp</code> → Claude ruft governte Loops. Oder <code>import { createRuntime } from "@elio/sdk"</code>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 06 EIGENER PROZESS ── -->
+  <section class="block" id="eigener-prozess">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-no">06</span>
+        <div>
+          <h2 class="sec-title">Eigenen Prozess abbilden</h2>
+          <p class="sec-lede">Kein Code nötig für den Anfang: du deklarierst in einer <code>feature.yaml</code>, <b>was</b> entsteht (Artefakt), <b>wann</b> es fertig ist (Eval-Gate) und <b>welche Nodes</b> den Loop bilden. Dann <code>elio run ./feature.yaml</code>.</p>
+        </div>
+      </div>
+
+      <span class="kicker reveal" style="display:block;margin-bottom:12px">Vier Deklarationen — vom Prozess zum Loop</span>
+      <div class="steps reveal" style="margin-bottom:28px">
+        <div class="step"><div><h4>Artefakt benennen</h4><p><code>artifact.kind</code> — was am Ende dasteht: ein Report, ein Migrations-Skript, eine <code>SKILL.md</code>, ein Datensatz. Der durable, iterativ verfeinerte State.</p></div></div>
+        <div class="step"><div><h4>Eval-Gate setzen</h4><p><code>artifact.evalGate</code> — die eine Bedingung, die „fertig" definiert. Der Outer Loop dreht, bis sie grün ist — nicht bis eine Step-Liste durch ist.</p></div></div>
+        <div class="step"><div><h4>Steps als Nodes verdrahten</h4><p><code>agent</code>/<code>llm</code> zum Denken, <code>transform · db · http</code> fürs Deterministische, <code>subworkflow</code> zum Schachteln, <code>approval</code> für Human-in-the-Loop — verbunden über <code>edges</code>.</p></div></div>
+        <div class="step"><div><h4>Registrieren &amp; fahren</h4><p>Built-in-Nodes brauchen nichts. Für eigene Logik registrierst du eine Custom-Node im <code>NodeRegistry</code> (built-in == custom, Inv. 6) — dann <code>elio run</code>.</p></div></div>
+      </div>
+
+      <div class="start-grid reveal">
+        <figure class="terminal">
+          <figcaption class="thead"><span class="d" aria-hidden="true"></span>report.weekly/feature.yaml · minimal</figcaption>
+          <pre><code>apiVersion: elio/v1
+kind: Feature
+metadata:
+  id: report.weekly          <span class="c"># dein Prozess</span>
+  version: 0.1.0
+  lifecycle: draft
+
+feature:
+  autonomy: guided
+  artifact:
+    kind: report             <span class="c"># WAS entsteht</span>
+    evalGate: checklist_passes  <span class="c"># WANN fertig → Loop dreht, bis grün</span>
+
+  graph:
+    state: { draft: null }
+    steps:
+      - id: draft            <span class="c"># Intelligenz: Entwurf schreiben/verbessern</span>
+        type: agent
+        with: { prompt: ./prompts/draft.md }
+        outputs: { output: state.draft }
+
+      - id: check            <span class="c"># Quality-Gate: deterministische Prüfung</span>
+        type: validate
+        with: { against: ./checklist.json }
+
+      - id: signoff          <span class="c"># Human-in-the-Loop: Freigabe</span>
+        type: approval
+        suspend: blocking
+        with: { reason: "Report freigeben?" }
+
+    edges:
+      - { from: draft, to: check }
+      - { from: check, to: signoff }</code></pre>
+        </figure>
+
+        <div class="entry">
+          <div class="card">
+            <span class="kicker">fahren · offline zuerst</span>
+            <h3>elio run ./feature.yaml</h3>
+            <p>Läuft mit der deterministischen <code>MockModel</code> ohne Key und ohne Netz — der Loop, die Gates und der Approval-Stop sind sofort sichtbar.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">echtes Modell</span>
+            <h3>--model ollama:llama3</h3>
+            <p>Derselbe Prozess, aber der <code>agent</code>-Step denkt über <code>ctx.model</code> — lokal (Ollama) oder in der Cloud (<code>azure-openai</code> · <code>claude</code>). <code>--max-cost-usd</code> deckelt die Ausgaben.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">schachteln &amp; skalieren</span>
+            <h3>subworkflow · per-record</h3>
+            <p>Ein Feature wird zur Node in einem anderen; <code>forEach</code> fächert über Datensätze — jeder Kind-Branch ein eigener Loop mit eigener correlation-id. Siehe <code>migrate.csv-to-db</code> als reales Beispiel.</p>
+          </div>
+          <div class="card">
+            <span class="kicker">Referenz</span>
+            <h3>Format &amp; Nodes</h3>
+            <p>Vollständiges <code>feature.yaml</code> mit per-record-Loop &amp; Effekt-Ledger: <a href="https://github.com/LeonNonnast/elio/blob/main/docs/elio-v0.1-skeleton.md" target="_blank" rel="noopener">docs/elio-v0.1-skeleton.md</a>.</p>
           </div>
         </div>
       </div>
