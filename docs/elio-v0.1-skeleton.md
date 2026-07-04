@@ -2,6 +2,8 @@
 
 > **These (ein Absatz):** ELIO ist eine **artifact-centric Loop-Engine**, keine Workflow-Engine. Das **Artefakt** ist das durable Ziel (iterativ erweitert), **Context/Session** ist das Problem, **dynamische Loops** sind die Lösung. Ein Loop ist nicht fertig, wenn seine Steps abgearbeitet sind, sondern wenn das Artefakt *gut genug* ist (Eval-Gate). Der **Kern ist ein SDK** (Runner + policy-gescopter Injector + Node-Funktionen + `ctx`); die CLI ist nur ein Client. **Vela** ist der **Inner Loop** (intra-session: liefert Kontext zur richtigen Zeit *innerhalb* einer Session); **ELIO** ist der **Outer Loop** (inter-session: Loop über *mehrere* Agent-Sessions). Was die Session-Grenze kreuzt, ist immer das **Artefakt** — nicht das Transcript. Dieses Dokument löst das grobe Brainstorm-Basisdokument als konkretes v0.1-Skelett ab.
 
+> **Lesehinweis (Stand):** Dies ist das **v0.1-Skelett**. Die **Invarianten (§1)**, die **Kern-Typen (§3)**, der **Runner-Loop (§4)** und die **Migrate-`feature.yaml`-Referenz (§7)** sind weiterhin die maßgebliche Architektur-Referenz. Der **Paket-Stand (§2)** und der **MoSCoW-Build-Plan (§8)** sind historisch: die aktuelle 10-Paket-Struktur steht in der [Root-README](../README.md); mehrere COULD-Items (`@elio/studio`, opaker Claude-Agent, Azure/OpenAI) sind inzwischen **gebaut**, `@elio/server` wurde nie gebaut (die Rolle füllt `@elio/engine`). Der verbindliche Status-Katalog ist die [Roadmap](elio-v0.2-roadmap.md).
+
 ---
 
 ## 1. Architektur-Invarianten (das Rückgrat)

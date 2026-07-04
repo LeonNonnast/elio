@@ -1,8 +1,8 @@
 # ELIO
 
-**ELIO — Enterprise Loop Intelligence Orchestrator.** An artifact-centric Loop-Engine: you declare an *artifact* and an *eval gate*, and ELIO runs an Outer Loop until that artifact passes the gate (Inv. 1). The engine lives in the SDK (`@elio/sdk` over `@elio/core`) — everything else (CLI, MCP server, Studio dashboard) is a thin client over the SDK with no engine logic of its own (Inv. 2).
+**ELIO — Enterprise Loop Intelligence Orchestrator.** An artifact-centric Loop-Engine: you declare an *artifact* and an *eval gate*, and ELIO runs an Outer Loop until that artifact passes the gate (Inv. 1). The engine logic lives in one place — `@elio/engine` (an `EngineService` over `@elio/sdk`/`@elio/core`) — and every surface (CLI, MCP server, Studio dashboard) is a thin client over it, in-process or over HTTP, with no engine logic of its own (Inv. 2).
 
-![status: v0.1](https://img.shields.io/badge/status-v0.1-blue) ![tests: 502 passing](https://img.shields.io/badge/tests-502%20passing-brightgreen) ![typecheck: clean](https://img.shields.io/badge/typecheck-clean-brightgreen) ![lint: clean](https://img.shields.io/badge/lint-clean-brightgreen) ![license: MIT](https://img.shields.io/badge/license-MIT-informational) ![surfaces: SDK · CLI · MCP · Studio](https://img.shields.io/badge/surfaces-SDK%20%C2%B7%20CLI%20%C2%B7%20MCP%20%C2%B7%20Studio-informational)
+![status: v0.2](https://img.shields.io/badge/status-v0.2-blue) ![tests: 722 passing](https://img.shields.io/badge/tests-722%20passing-brightgreen) ![typecheck: clean](https://img.shields.io/badge/typecheck-clean-brightgreen) ![lint: clean](https://img.shields.io/badge/lint-clean-brightgreen) ![license: MIT](https://img.shields.io/badge/license-MIT-informational) ![surfaces: SDK · CLI · MCP · Studio](https://img.shields.io/badge/surfaces-SDK%20%C2%B7%20CLI%20%C2%B7%20MCP%20%C2%B7%20Studio-informational)
 
 ## Requirements
 
@@ -31,7 +31,7 @@ Other root scripts: `pnpm typecheck` (`tsc -b`), `pnpm clean` (`tsc -b --clean`)
 pnpm test
 ```
 
-Runs `vitest run` — **502 tests** green; typecheck + lint clean.
+Runs `vitest run` — **722 tests** green (3 skipped: real-provider e2e that need live credentials); typecheck + lint clean.
 
 ## 60-second Quickstart
 
@@ -49,56 +49,75 @@ node packages/studio/dist/bin.js
 
 `elio run demo.hello` streams `RunEvent`s and exits `0` when the run completes with `gate=passed`. Studio listens on `http://localhost:4123` and shows live run status, the loop tape, an SSE update log, and an approval inbox.
 
-For the full walkthrough see **[docs/elio-usage.md](docs/elio-usage.md)**.
+For the full walkthrough see **[docs/elio-usage.md](docs/elio-usage.md)** (index: **[docs/README.md](docs/README.md)**).
 
-## The four surfaces at a glance
+## The surfaces at a glance
 
-All three client surfaces are thin `@elio/sdk` clients; the demos are offline and deterministic (MockModel). The available features everywhere are `demo.hello` (the offline hello-world — the Outer Loop polishing a greeting until a quality gate passes), `demo.draft-until-good`, `demo.retry-then-pass`, `migrate.csv-to-db`, and `build-skill` — the skill-generator meta-vertical whose artifact is a Claude-Code SKILL.md, with the brief elicited at the prompt or supplied up front (plus, for the CLI, a path to a `feature.yaml`).
-
-One additional **online** demo runs on the CLI/SDK: **`demo.local-agent`** — a local **Ollama** agent drives the Outer Loop. `ctx.agent` is the transparent in-process engine (a bounded multi-turn loop, **no LangGraph**) whose model calls flow through `ctx.model` → an `OllamaModel` on `http://localhost:11434`. Run it with `node packages/cli/dist/bin.js run demo.local-agent` after `ollama pull llama3`; see [docs/elio-usage.md](docs/elio-usage.md#run-a-local-ollama-agent-demolocal-agent).
-
-**Provider layer & model selection.** A feature pins a logical `provider:model` per step; the environment supplies endpoints/credentials, resolved by the shared `resolveProviderProfiles()`. Four provider profiles ship: `mock` (deterministic, offline default), `ollama` (local, auto-detected), `claude` (cloud, `ANTHROPIC_API_KEY`), and **`azure-openai` — now fully wired** (`complete()` + SSE `stream()`, OpenAI-compatible; `AZURE_OPENAI_ENDPOINT`/`_API_KEY`/`_DEPLOYMENT`/`_API_VERSION`). The verticals `migrate.csv-to-db` and `build-skill` route their intelligence step through `ctx.model`, so you can override the model with `--model <spec>` on the CLI or a per-call `model` param via MCP (default stays offline MockModel). For environment-specific setups (two Ollama endpoints, prod/test Azure deployments) you define **named profiles** in `elio.profiles.yaml` (see [`elio.profiles.example.yaml`](elio.profiles.example.yaml)) — credentials referenced via the secrets layer, costs as rough per-profile estimates (no precise price table). See [Provider profiles & model selection](docs/elio-usage.md#provider-profiles--model-selection-providermodel).
+The engine (`@elio/engine`) is the single source of engine behaviour. CLI, MCP, and Studio are thin clients over the same `EngineService` — either **in-process** (`LocalEngine`) or over **HTTP/SSE** against a long-running host (`elio serve` → `EngineHost`, reachable via `--engine-url` / `$ELIO_ENGINE_URL`). Policy, cost, and routing are never duplicated or bypassed by a client.
 
 | Surface | Package | How to run |
 |---|---|---|
 | **SDK** (programmatic) | `@elio/sdk` | `import { createRuntime, run, resume, loadFeaturePackFromFile } from "@elio/sdk"` |
-| **CLI** | `elio` (`packages/cli`) | `node packages/cli/dist/bin.js run demo.draft-until-good` |
+| **Engine** (shared core / host) | `@elio/engine` | `import { LocalEngine, createEngineHost, EngineClient } from "@elio/engine"` |
+| **CLI** | `elio` (`packages/cli`) | `node packages/cli/dist/bin.js run demo.draft-until-good` · `elio serve [--port <n>]` |
 | **MCP server** | `@elio/mcp` (bin `elio-mcp`) | `node packages/mcp/dist/bin.js` (stdio JSON-RPC) |
 | **Studio dashboard** | `@elio/studio` (bin `elio-studio`) | `node packages/studio/dist/bin.js` → `http://localhost:4123` |
 
-## Project structure (8 packages)
+## Features
+
+The demos are offline and deterministic (MockModel) unless a real model is selected. Available feature packs:
+
+- **Demos** — `demo.hello` (the offline "aha" case: the Outer Loop polishing a greeting until a quality gate passes), `demo.draft-until-good`, `demo.retry-then-pass`, and the online `demo.local-agent` (a local **Ollama** agent drives the loop via `ctx.model` on `http://localhost:11434`; run after `ollama pull llama3`).
+- **Verticals** — `migrate.csv-to-db` (CSV→DB migration, sample-first, dry-run then approval-gated commit) and `build-skill` (a meta-vertical whose artifact is a Claude-Code `SKILL.md` — interview, draft, validate, human approval, governed write).
+- **Process-mining** (`pm.*`) — `pm.event-log` (AI-free hook logger), `pm.session-summary` (LLM 1×/session), `pm.discover` (read-only mining over the captured events). See [docs/elio-process-mining.md](docs/elio-process-mining.md).
+- **Learning / optimization** — read-only retro-miners over the loop tape produce `PromotionCandidate`s; a human-gated `promote-candidate` step hardens them into a new, versioned pack variant (the hot path is never touched). See [docs/elio-learning-engine.md](docs/elio-learning-engine.md).
+
+**Provider layer & model selection.** A feature pins a logical `provider:model` per step; the environment supplies endpoints/credentials, resolved by the shared `resolveProviderProfiles()`. Four provider profiles ship: `mock` (deterministic, offline default), `ollama` (local, auto-detected), `claude` (cloud, `ANTHROPIC_API_KEY`), and `azure-openai` (`complete()` + SSE `stream()`, OpenAI-compatible; `AZURE_OPENAI_ENDPOINT`/`_API_KEY`/`_DEPLOYMENT`/`_API_VERSION`). Verticals route their intelligence step through `ctx.model`, so you override the model with `--model <spec>` on the CLI or a per-call `model` param via MCP (default stays offline MockModel). For environment-specific setups you define **named profiles** in `elio.profiles.yaml` (see [`elio.profiles.example.yaml`](elio.profiles.example.yaml)) — credentials referenced via the secrets layer, costs as rough per-profile estimates. See [Provider profiles & model selection](docs/elio-usage.md#provider-profiles--model-selection-providermodel).
+
+In addition, `@elio/vela-adapter` and `@elio/claude-adapter` bind Vela and Claude as **agent node-engines** — a `type: agent` step can delegate to a transparent (Vela, model calls flow through `ctx.model`) or opaque (Claude, hull-governed) engine.
+
+## Project structure (10 packages)
 
 ```text
 packages/
   core           @elio/core           Kern-Engine: Runner, Injector, ctx-Contracts, Node-Registry,
                                        Run Store + Checkpoint + correlation-id, Loop Tape, Policy stack.
   sdk            @elio/sdk            Public API over @elio/core: run()/resume(), YAML pack loader,
-                                       node registration, model adapters, services. Primary entry point.
-  cli            elio                 Thin client: elio run / resume / runs, approval as a CLI prompt.
+                                       node registration, model adapters, services.
+  engine         @elio/engine         Central EngineService: LocalEngine (in-process) + EngineHost/EngineClient
+                                       (HTTP/SSE). The one place engine behaviour lives (Inv. 2).
+  cli            elio                 Thin client: elio run / resume / runs / serve, approval as a CLI prompt.
   mcp            @elio/mcp            MCP server surface: exposes feature packs as MCP tools (stdio).
   studio         @elio/studio         Local HTTP dashboard (read-mostly): run status, loop tape, SSE, approvals.
   migrate        @elio/migrate        Dogfood vertical: CSV→DB migration feature pack + Source/Target adapters.
   skill-builder  @elio/skill-builder  Meta-vertical: a feature whose artifact is a Claude-Code SKILL.md
                                        (build-skill) — interview, draft, validate, approve, governed write.
-  vela-adapter   @elio/vela-adapter   Vela integration: binds Vela as a transparent `agent` node-engine.
+  vela-adapter   @elio/vela-adapter   Binds Vela as a transparent `agent` node-engine (model via ctx.model).
+  claude-adapter @elio/claude-adapter Binds Claude as an opaque `agent` node-engine (hull-governed).
 ```
 
-> `@elio/server` appears in the skeleton only as a *(COULD)* / "later" item — it is **not** one of the 8 built packages and does not exist under `packages/`.
+> `@elio/server` appears in the original skeleton only as a *(COULD)* / "later" item — it was never built and does not exist under `packages/`. The shared-core role it hinted at is filled by `@elio/engine`.
 
 ## Documentation
 
-- **[docs/elio-usage.md](docs/elio-usage.md)** — detailed how-to-use guide (CLI, SDK, MCP, Studio, feature packs, migrate, troubleshooting).
-- **[docs/elio-v0.1-acceptance.md](docs/elio-v0.1-acceptance.md)** — what works in v0.1 and what is deferred.
-- **[docs/elio-v0.1-skeleton.md](docs/elio-v0.1-skeleton.md)** — architecture, invariants, and the migrate `feature.yaml` reference.
+Start at the docs index: **[docs/README.md](docs/README.md)**. Highlights:
 
-## v0.1 scope & what's deferred to v0.2
+- **[docs/elio-usage.md](docs/elio-usage.md)** — detailed how-to (CLI, SDK, MCP, Studio, feature packs, providers, verticals, troubleshooting).
+- **[docs/elio-v0.1-skeleton.md](docs/elio-v0.1-skeleton.md)** — architecture bible: the 23 invariants, core type contracts, the runner loop, and the migrate `feature.yaml` reference.
+- **[docs/elio-v0.2-roadmap.md](docs/elio-v0.2-roadmap.md)** — the living Open-Topics status catalog (the source of truth for "what's done / deferred / declined").
+- **[docs/elio-engine-service-refactor.md](docs/elio-engine-service-refactor.md)**, **[docs/elio-learning-engine.md](docs/elio-learning-engine.md)**, **[docs/elio-process-mining.md](docs/elio-process-mining.md)** — design docs for the engine layer, learning engine, and process-mining.
 
-v0.1 is built, runnable, and verified at the execution level. Deferred, and documented honestly rather than silently broken:
+Historical planning artifacts (v0.1 build plan, impl-decisions, acceptance, the original brainstorm) live under `_bmad-output/` and are not part of the maintained docs.
 
-- **Cross-process CLI store** → ✅ done (was v0.2). The CLI persists runs to a durable `FileRunStore` (`$ELIO_STATE_DIR`, else `<cwd>/.elio/runs`), so `elio runs` / `elio resume` work **across processes**. Cross-process resume reconstructs the run context from the checkpoint's artifact snapshot + the persisted run input + the `<feature>` argument (which re-supplies the pack). Cross-process *live* `subscribe()`/SSE stays in-process (Studio); a DB-backed store can later dock at the same `RunStore` contract. See [docs/elio-v0.2-roadmap.md](docs/elio-v0.2-roadmap.md).
-- **Vela suspend/resume** → v0.2. Only the *resolved* agent path is real in v0.1; suspend/resume + identity↔correlation mapping are deferred. The in-process agent engine is the working fallback.
-- **Real Worker/VM sandbox** → seam only. The `NodeSandbox` seam + `InProcessSandbox` ship; *security-by-absence* via the injector is fully enforced (a node has no `ctx.fs/db/model/secrets` it wasn't granted). OS-level isolation is v0.2.
-- **`maxCostUsd` and `ctx.http`** → resolved-but-unenforced. The policy stack resolves them but v0.1 does not enforce/inject them. Run-level `budget` (Inv. 21) **is** enforced.
+## Status & honest limits
+
+Built, runnable, and verified at the execution level. The **[roadmap](docs/elio-v0.2-roadmap.md)** is the source of truth for status; in short:
+
+- **Shipped (v0.2):** cross-process `FileRunStore` (`runs`/`resume` across processes), `maxCostUsd` hard cap, `ctx.http` enforcement, `@elio/claude-adapter`, and Vela suspend/resume — the latter **real-verified against the actual `vela-sdk` dist** (guarded test).
+- **Partial:** OS-level sandboxing. A real `worker_threads` + `node:vm` sandbox ships for Tier-2 generated scripts (`ctx.scripts`); the `NodeSandbox` seam for *all* nodes is still `InProcessSandbox`. Security-by-absence via the injector is fully enforced regardless (a node has no capability it wasn't granted).
+- **Deferred:** DB-backed run store (SQLite/Postgres — docks at the same `RunStore` contract), cross-process live `subscribe()`/SSE, platform-wide approval-deny safe-by-default, and dynamic-feature/meta-orchestration.
+
+This is a coherent, tested reference implementation of *governed* loop orchestration — its value today is the architecture and proven feasibility, not a deployed production workload.
 
 ## License
 

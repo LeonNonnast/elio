@@ -1,6 +1,8 @@
-# ELIO v0.1 — Usage Guide
+# ELIO — Usage Guide
 
-How to use ELIO across its four surfaces: the **SDK** (the core), the **CLI**, the **MCP server**, and the **Studio dashboard**. Plus how to write a feature pack, run the migrate dogfood, and the known v0.1 limits.
+How to use ELIO across its surfaces: the **SDK** (the core), the **CLI**, the **MCP server**, and the **Studio dashboard**. Plus how to write a feature pack, run the migrate dogfood, and the known limits.
+
+> For "what's built vs. deferred", the [roadmap](elio-v0.2-roadmap.md) is the source of truth; this guide focuses on *how to use* what's built.
 
 > All demos are **offline and deterministic** — they use the built-in `MockModel`, so nothing here needs an API key or network.
 
@@ -19,7 +21,7 @@ Verify:
 
 ```bash
 pnpm typecheck   # tsc -b
-pnpm test        # vitest run — 361 tests
+pnpm test        # vitest run — 722 tests green (3 skipped)
 pnpm lint        # eslint .
 ```
 
@@ -138,7 +140,7 @@ node packages/cli/dist/bin.js resume migrate.csv-to-db "run/branch/step#checkpoi
 
 `<feature>` is positional (or `--feature <f>`), then the `correlation-id` (form `run/branch/step#checkpoint`, codec `encode/decodeCorrelation`), then an optional `[answer]`. When `[answer]` is omitted it defaults to `{ approved: true }`.
 
-> **v0.1 limit:** the store is in-memory and process-local. A `resume` in a *new* process cannot find a checkpoint created by an earlier `elio run` process — the command reports this explicitly. Cross-process resume is v0.2. Use the in-process flow above for the working approval cycle.
+> **Cross-process resume works** via the durable `FileRunStore` (see [Persistent run store](#persistent-run-store-elioruns--cross-process-runs--resume) below): a `resume` in a *new* process reconstructs the run context from the persisted checkpoint. The in-process flow above is the simplest path for the approval cycle; cross-process is for answering a run from a different process.
 
 ### `elio runs <feature>`
 
@@ -826,13 +828,13 @@ Via **MCP**, call the `build-skill` tool — pass the brief fields as arguments 
 
 **Bins crash with `ERR_MODULE_NOT_FOUND`.** You built with `pnpm -r build`. Use the **root** `pnpm build` — it runs `scripts/fix-esm-extensions.mjs` to make the emitted ESM runnable under Node. Rebuild from the repo root.
 
-**`elio runs` shows nothing / `elio resume` (new process) can't find a run.** The run store is in-memory and **process-local** in v0.1. A new process gets a freshly-wired runtime with an empty store, so it can't see runs from a prior `elio run`. The commands print a clear hint, not an empty-looking bug. The full `run → suspend → resume` approval cycle works **within one `elio run`** (which prompts on stdin). Cross-process / persistent runs are v0.2.
+**`elio runs` shows nothing / `elio resume` (new process) can't find a run.** Check `$ELIO_STATE_DIR` (else `<cwd>/.elio/runs`) — the durable `FileRunStore` is what makes `runs`/`resume` work across processes, so a mismatched state dir (or running from a different cwd) is the usual cause. Within one `elio run`, the full `run → suspend → resume` approval cycle works in-process (prompting on stdin) regardless.
 
 **MCP `tools/call` returns an error on a suspended run.** A `node-suspended` is returned as an `isError` result with `structuredContent { status:"suspended", … }` — there is no auto-resolve. v0.1 tool-calls are synchronous; resuming from MCP is not wired in v0.1.
 
-**Vela suspend/resume.** Only the *resolved* agent path is real in v0.1. Suspend/resume + identity↔correlation mapping are v0.2; the in-process agent engine is the working fallback. By default the `agent` node uses MockModel.
+**Vela suspend/resume.** Real and verified against the actual `vela-sdk` dist (guarded test): a `depends_on` gate parks the run, and identity↔correlation mapping re-finds it on resume. By default the `agent` node uses MockModel. See the [roadmap](elio-v0.2-roadmap.md) for the mechanics.
 
-**Real Worker/VM sandbox.** Seam only (`NodeSandbox` + `InProcessSandbox`). Security-by-absence via the injector *is* enforced — a node has no `ctx.fs/db/model/secrets` it wasn't granted — but OS-level isolation is v0.2.
+**Worker/VM sandbox.** Partial: a real `worker_threads` + `node:vm` sandbox ships for Tier-2 generated scripts (`ctx.scripts`); the `NodeSandbox` seam for *all* nodes is still `InProcessSandbox`, so OS-level isolation for every node is deferred. Security-by-absence via the injector *is* enforced regardless — a node has no `ctx.fs/db/model/secrets/http` it wasn't granted.
 
 **Azure OpenAI preflight fails / step says the profile is missing config.** `AzureOpenAiModel` is fully wired
 (`complete()` + `stream()`), but a feature pinning `provider: azure-openai` only passes preflight when the
@@ -841,12 +843,13 @@ profile is `isConfigured()` — **endpoint + api-key + deployment** all present.
 `2024-10-21`). `resolveProviderProfiles()` registers the profile only when endpoint **and** api-key are both
 set, so a half-configured environment surfaces as one clear aggregated preflight error, not a mid-run failure.
 
-**`maxCostUsd` / `ctx.http` seem to do nothing.** They are resolved by the policy stack but **not enforced/injected** in v0.1. Run-level `budget` (Inv. 21) **is** enforced — pass it via `RunInput.budget`.
+**`maxCostUsd` / `ctx.http`.** Both are enforced. `maxCostUsd` is a hard USD cap on `RunInput` (CLI `--max-cost-usd`) that stops the Outer Loop at its head; it bites when a profile carries `usdPerMTok` (token-only runs still fall back to the iteration bound). `ctx.http` is host-scoped and checked per call (like `fs`/`db`), fail-by-absence. Run-level `budget` (Inv. 21) is also enforced — pass it via `RunInput.budget`.
 
 ---
 
 ## See also
 
 - [README.md](../README.md) — project front page.
-- [docs/elio-v0.1-acceptance.md](elio-v0.1-acceptance.md) — what works + deferred items.
+- [docs/README.md](README.md) — documentation index.
+- [docs/elio-v0.2-roadmap.md](elio-v0.2-roadmap.md) — the living status catalog (what's done / deferred / declined).
 - [docs/elio-v0.1-skeleton.md](elio-v0.1-skeleton.md) — architecture, invariants, migrate `feature.yaml` reference (§7).

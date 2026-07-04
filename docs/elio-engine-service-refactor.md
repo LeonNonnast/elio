@@ -6,7 +6,8 @@ Run-Store wirkte UI-gebunden, obwohl er konzeptionell der Engine gehört.
 
 ## Umsetzungsstand
 
-Alle Phasen 0–4 sind implementiert; voller Typecheck + 693 Tests (90 Dateien) grün, inkl. des
+Alle Phasen 0–4 sind implementiert; voller Typecheck + Suite grün (693 Tests / 90 Dateien zum
+Zeitpunkt dieses Refactors; aktueller Gesamtstand siehe [Root-README](../README.md)), inkl. des
 echten Built-Bin-Smoke-Tests (spawnt cli/mcp/studio dist). Ergebnis:
 
 - **`@elio/engine`** ist die neue zentrale Schicht: `FeatureProvider` + `FeatureCatalog`

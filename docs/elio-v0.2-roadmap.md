@@ -1,6 +1,6 @@
 # ELIO v0.2 — Roadmap & Ideen
 
-> Sammelpunkt für die Arbeit nach v0.1 (v0.1-Stand: `docs/elio-v0.1-acceptance.md`). Konsolidiert die
+> Sammelpunkt für die Arbeit nach v0.1 (v0.1-Stand: `_bmad-output/planning-artifacts/elio-v0.1-acceptance.md`). Konsolidiert die
 > ursprüngliche `ideas.md` und die geplanten nächsten Bausteine (Claude-Adapter, Studio-Redesign).
 
 ## Open-Topics-Katalog (Status)
